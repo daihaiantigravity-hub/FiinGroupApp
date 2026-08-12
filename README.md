@@ -31,3 +31,5 @@ Database migrations are applied explicitly with `backend.DatabaseMigrator`; the 
 Disposable database integration setup is documented in `docs/integration-test-runbook.md`; it uses MariaDB and is separate from Jarvis.
 
 Pilot users are created explicitly with `backend.IdentityProvisioner`; no credentials are seeded in source control.
+
+The technical pilot configuration and evidence requirements are documented in `docs/pilot-environment.md`.

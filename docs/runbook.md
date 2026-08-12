@@ -35,4 +35,10 @@ dotnet build --no-restore
 
 cd ..\backend.Tests
 dotnet test
+
+cd ..\backend.DatabaseMigrator
+dotnet build
+
+cd ..\backend.IdentityProvisioner
+dotnet build
 ```

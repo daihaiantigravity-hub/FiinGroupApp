@@ -99,6 +99,12 @@
 - Provisioning requires explicit confirmation of `FiinGroupApp.Identity`.
 - No credentials or seed users were added to the repository.
 
+## 2026-08-12 — Pilot CI and environment documentation
+
+- Added CI builds for backend tests, migration runner and identity provisioner.
+- Documented environment variables and evidence required before enabling the new identity store.
+- Kept compatibility mode as the default.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
