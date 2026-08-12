@@ -34,3 +34,9 @@
 - Refactored the legacy auth adapter to support injected base URL and fetch implementation.
 - Added contract tests for authenticated login, OTP/setup outcomes, bearer propagation, safe errors and logout token clearing.
 - All frontend tests pass.
+
+## 2026-08-12 — Legacy comparison direction confirmed
+
+- Recorded `FiinGroup.Jarvis` as the trusted behavioral and code-comparison source.
+- Added migration catalog and source-to-target comparison workflow.
+- Preserved the separate new user store as the target ownership model.

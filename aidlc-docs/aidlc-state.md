@@ -25,6 +25,12 @@
 - [ ] Application Platform
 - [~] Authentication and user profile — legacy adapter and React login/OTP flow implemented; setup, profile and permission screens pending
 
+## Migration decision
+
+- Legacy Jarvis is the trusted behavioral/source reference.
+- FiinGroupApp owns the target implementation and future user/permission store.
+- Migration is validated by source-to-target comparison artifacts and tests.
+
 ### OPERATIONS
 
 - [ ] Deployment and operations design
