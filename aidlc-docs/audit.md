@@ -70,6 +70,11 @@
 - Added `backend.DatabaseMigrator` with checksum validation, migration history and explicit database confirmation.
 - Runner refuses targets other than `FiinGroupApp.Identity` and is not called by the API.
 
+## 2026-08-12 — Authentication service tests
+
+- Added backend unit tests for input validation, unknown users, password verification and permission loading.
+- Tests use a fake store and do not access any database.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
