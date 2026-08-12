@@ -75,6 +75,12 @@
 - Added backend unit tests for input validation, unknown users, password verification and permission loading.
 - Tests use a fake store and do not access any database.
 
+## 2026-08-12 — Authentication contract matrix
+
+- Mapped legacy auth endpoints to target `/api/v2/auth` capabilities.
+- Recorded missing session, 2FA, admin policy and disposable-database gates.
+- Kept legacy adapter as the technical-pilot fallback.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.

@@ -31,6 +31,7 @@
 - FiinGroupApp owns the target implementation and future user/permission store.
 - Migration is validated by source-to-target comparison artifacts and tests.
 - Current source inventory refreshed on 2026-08-12; see `inception/reverse-engineering/current-baseline.md`.
+- Authentication target remains behind the comparison/acceptance gate; see `construction/auth-contract-matrix.md`.
 
 ### OPERATIONS
 
