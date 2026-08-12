@@ -21,3 +21,10 @@
 - Added in-memory auth state management and login/OTP UI.
 - Kept the .NET backend auth replacement out of scope for this increment.
 - Frontend build and tests pass.
+
+## 2026-08-12 — Authentication profile and permission slice
+
+- Added legacy profile and permission adapters.
+- Added React auth state permissions, protected routes, logout and profile view.
+- Preserved in-memory token handling and legacy rollback boundary.
+- Frontend and backend verification remain green.
