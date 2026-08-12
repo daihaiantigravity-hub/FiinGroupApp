@@ -10,4 +10,15 @@
 
 8. Update and verify `backend/Database/Migrations/migrations.json` before applying any migration.
 
+## Migration runner
+
+The standalone runner is `backend.DatabaseMigrator`. It refuses any database other than the explicitly confirmed `FiinGroupApp.Identity` database and verifies migration checksums before execution.
+
+```powershell
+cd backend.DatabaseMigrator
+dotnet run -- --connection "<secret connection string>" --confirm-database FiinGroupApp.Identity --manifest "..\backend\Database\Migrations\migrations.json"
+```
+
+Do not put the connection string in a committed file or shell history in shared environments. The runner is not invoked by the web API.
+
 Rollback in a disposable environment means dropping the new database. Production rollback requires an approved backup/restore procedure; never drop a shared or legacy database.

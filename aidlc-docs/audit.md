@@ -65,6 +65,11 @@
 - The API now fails fast if identity mode is enabled without a connection string.
 - Database migrations remain an explicit operator/deployment action, never an application-startup action.
 
+## 2026-08-12 — Standalone migration runner
+
+- Added `backend.DatabaseMigrator` with checksum validation, migration history and explicit database confirmation.
+- Runner refuses targets other than `FiinGroupApp.Identity` and is not called by the API.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
