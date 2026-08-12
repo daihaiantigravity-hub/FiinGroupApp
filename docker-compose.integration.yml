@@ -1,0 +1,21 @@
+services:
+  fiingroup-identity-db:
+    image: mariadb:11.4
+    container_name: fiingroup-identity-db-integration
+    environment:
+      MARIADB_DATABASE: FiinGroupApp.Identity
+      MARIADB_USER: ${FIINGROUP_DB_USER:?set FIINGROUP_DB_USER}
+      MARIADB_PASSWORD: ${FIINGROUP_DB_PASSWORD:?set FIINGROUP_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${FIINGROUP_DB_ROOT_PASSWORD:?set FIINGROUP_DB_ROOT_PASSWORD}
+    ports:
+      - "${FIINGROUP_DB_PORT:-33306}:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - fiingroup_identity_integration_data:/var/lib/mysql
+
+volumes:
+  fiingroup_identity_integration_data:

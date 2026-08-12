@@ -27,3 +27,5 @@ The backend currently requires a .NET 8 SDK. The installed SDK must be checked b
 `D:\DEV\FiinGroup.Jarvis` is the trusted legacy reference for behavior and code comparison. FiinGroupApp is built incrementally; the new database/user store is the target ownership model, while legacy adapters are used only for compatibility validation during migration.
 
 Database migrations are applied explicitly with `backend.DatabaseMigrator`; the API never migrates the database at startup.
+
+Disposable database integration setup is documented in `docs/integration-test-runbook.md`; it uses MariaDB and is separate from Jarvis.

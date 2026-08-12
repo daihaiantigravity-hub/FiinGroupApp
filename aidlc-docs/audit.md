@@ -87,6 +87,12 @@
 - Documented cookie, key-management, persistence and rate-limit requirements.
 - No production token or placeholder session implementation was enabled.
 
+## 2026-08-12 — Disposable identity integration environment
+
+- Added a MariaDB-only Docker Compose definition for local integration testing.
+- Added a runbook for migration, store verification and cleanup.
+- Did not start containers or connect to any database.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
