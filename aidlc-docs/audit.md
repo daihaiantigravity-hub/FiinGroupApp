@@ -14,3 +14,10 @@
 - Documented login, OTP/TOTP, 2FA setup, profile, permissions and admin-2FA boundaries.
 - Recorded security constraints for the new React/.NET authentication adapter.
 - No authentication code or legacy route was modified.
+
+## 2026-08-12 — Authentication construction started
+
+- Added typed auth models and a legacy `/api/auth` adapter in the React frontend.
+- Added in-memory auth state management and login/OTP UI.
+- Kept the .NET backend auth replacement out of scope for this increment.
+- Frontend build and tests pass.

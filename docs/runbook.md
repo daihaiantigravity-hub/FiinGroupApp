@@ -8,6 +8,8 @@ npm install
 npm run dev
 ```
 
+By default Vite proxies `/api` and `/uploads` to the legacy Jarvis server at `http://localhost:3000`. Override it with `LEGACY_API_PROXY_TARGET` when the legacy server uses another address.
+
 ## Backend
 
 The project targets .NET 8. Install the .NET 8 SDK before running:

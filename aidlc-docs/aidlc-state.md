@@ -23,7 +23,7 @@
 ### CONSTRUCTION
 
 - [ ] Application Platform
-- [ ] Authentication and user profile
+- [~] Authentication and user profile — legacy adapter and React login/OTP flow implemented; setup, profile and permission screens pending
 
 ### OPERATIONS
 
