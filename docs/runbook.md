@@ -1,0 +1,33 @@
+# Local Runbook
+
+## Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+## Backend
+
+The project targets .NET 8. Install the .NET 8 SDK before running:
+
+```powershell
+cd backend
+dotnet restore
+dotnet run
+```
+
+The machine currently exposes .NET 9 and .NET 10 SDKs only. Restore/build was verified successfully using the .NET 8 target assets; install the .NET 8 SDK for a fully pinned local toolchain.
+
+## Verification
+
+```powershell
+cd frontend
+npm test
+npm run build
+
+cd ..\backend
+dotnet restore
+dotnet build --no-restore
+```
