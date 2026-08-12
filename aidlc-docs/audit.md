@@ -53,6 +53,12 @@
 - Documented encryption, hashing, migration and rollback constraints.
 - Did not connect the application or modify the Jarvis database.
 
+## 2026-08-12 — Opt-in MySQL identity store
+
+- Added `MySqlUserStore` behind `IdentityStore:Enabled` and a separate connection string.
+- Added PBKDF2 password hashing and a backend unit test project.
+- Default configuration remains disabled and rejects all credentials.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.

@@ -5,7 +5,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
-builder.Services.AddSingleton<IUserStore, DevelopmentUserStore>();
+builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+if (builder.Configuration.GetValue<bool>("IdentityStore:Enabled") && !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Identity")))
+    builder.Services.AddScoped<IUserStore>(sp => new MySqlUserStore(builder.Configuration.GetConnectionString("Identity")!, sp.GetRequiredService<IPasswordHasher>()));
+else
+    builder.Services.AddSingleton<IUserStore, DevelopmentUserStore>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"])

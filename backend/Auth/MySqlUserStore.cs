@@ -1,0 +1,65 @@
+using MySqlConnector;
+
+namespace FiinGroupApp.Api.Auth;
+
+public sealed class MySqlUserStore(string connectionString, IPasswordHasher passwordHasher) : IUserStore
+{
+    public async Task<UserProfile?> FindByUsernameAsync(string username, CancellationToken cancellationToken)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new MySqlCommand("SELECT id, username, display_name, email FROM app_users WHERE username = @username AND status = 'ACTIVE' AND (locked_until IS NULL OR locked_until < UTC_TIMESTAMP(6)) LIMIT 1", connection);
+        command.Parameters.AddWithValue("@username", username);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return new UserProfile(reader.GetGuid("id"), reader.GetString("username"), reader.GetString("display_name"), reader.IsDBNull(reader.GetOrdinal("email")) ? null : reader.GetString("email"), []);
+    }
+
+    public async Task<bool> VerifyPasswordAsync(UserProfile user, string password, CancellationToken cancellationToken)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new MySqlCommand("SELECT password_hash FROM app_users WHERE id = @id AND status = 'ACTIVE' LIMIT 1", connection);
+        command.Parameters.AddWithValue("@id", user.Id);
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is string encodedHash && passwordHasher.Verify(password, encodedHash);
+    }
+
+    public async Task<PermissionSet> GetPermissionsAsync(UserProfile user, CancellationToken cancellationToken)
+    {
+        var forms = new Dictionary<string, PermissionFlags>(StringComparer.OrdinalIgnoreCase);
+        var actions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        const string sql = """
+            SELECT p.resource_code, p.action_code
+            FROM app_permissions p
+            INNER JOIN app_role_permissions rp ON rp.permission_id = p.id
+            INNER JOIN app_user_roles ur ON ur.role_id = rp.role_id
+            WHERE ur.user_id = @id
+            """;
+        await using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@id", user.Id);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var resource = reader.GetString("resource_code");
+            var action = reader.GetString("action_code");
+            actions.Add($"{resource}:{action}");
+            forms[resource] = Merge(forms.GetValueOrDefault(resource), action);
+        }
+        return new PermissionSet(forms, actions);
+    }
+
+    private static PermissionFlags Merge(PermissionFlags? current, string action)
+    {
+        var value = current ?? new PermissionFlags(false, false, false, false, false, false, false, false, false, false);
+        return action.ToUpperInvariant() switch
+        {
+            "ACCESS" => value with { CanAccess = true }, "VIEW" => value with { CanView = true }, "ADD" => value with { CanAdd = true },
+            "EDIT" => value with { CanEdit = true }, "DELETE" => value with { CanDelete = true }, "IMPORT" => value with { CanImport = true },
+            "EXPORT" => value with { CanExport = true }, "APPROVE" => value with { CanApprove = true }, "PAY" => value with { CanPay = true },
+            "COMPLETE" => value with { CanComplete = true }, _ => value
+        };
+    }
+}

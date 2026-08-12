@@ -32,4 +32,7 @@ npm run build
 cd ..\backend
 dotnet restore
 dotnet build --no-restore
+
+cd ..\backend.Tests
+dotnet test
 ```

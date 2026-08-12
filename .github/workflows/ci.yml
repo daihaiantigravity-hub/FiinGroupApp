@@ -33,3 +33,4 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet restore
       - run: dotnet build --no-restore --configuration Release
+      - run: dotnet test ../backend.Tests/FiinGroupApp.Api.Tests.csproj --configuration Release
