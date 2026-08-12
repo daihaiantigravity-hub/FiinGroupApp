@@ -29,3 +29,7 @@
 2. Session token/cookie and refresh rotation design is not implemented.
 3. 2FA secret encryption key management is not configured.
 4. No disposable identity database has been provisioned for integration tests.
+
+## Target contracts added
+
+The .NET project now defines `ISessionStore`, `ITwoFactorService`, `AuthSession` and `TwoFactorChallenge`. They are intentionally not registered as production implementations until key management, persistence and security tests are complete.

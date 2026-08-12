@@ -81,6 +81,12 @@
 - Recorded missing session, 2FA, admin policy and disposable-database gates.
 - Kept legacy adapter as the technical-pilot fallback.
 
+## 2026-08-12 — Session and 2FA contracts
+
+- Added .NET contracts for server-side sessions, refresh revocation and single-use 2FA challenges.
+- Documented cookie, key-management, persistence and rate-limit requirements.
+- No production token or placeholder session implementation was enabled.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
