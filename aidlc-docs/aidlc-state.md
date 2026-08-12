@@ -23,7 +23,7 @@
 ### CONSTRUCTION
 
 - [ ] Application Platform
-- [~] Authentication and user profile — legacy adapter and React login/OTP flow implemented; setup, profile and permission screens pending
+- [~] Authentication and user profile — React legacy adapter plus .NET target contracts; database store and 2FA migration pending
 
 ## Migration decision
 

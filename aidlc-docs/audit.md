@@ -46,3 +46,9 @@
 - Recounted current JavaScript, HTML, CSS, SQL, route, migration and worker surfaces from the legacy repository.
 - Added the refreshed baseline without modifying the legacy source.
 - Marked imported historical counts as context requiring revalidation.
+
+## 2026-08-12 — .NET authentication target boundary
+
+- Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
+- Registered a development store that rejects all credentials and contains no seeded account.
+- Kept the React legacy adapter active for compatibility comparison.
