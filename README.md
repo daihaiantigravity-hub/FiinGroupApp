@@ -29,3 +29,5 @@ The backend currently requires a .NET 8 SDK. The installed SDK must be checked b
 Database migrations are applied explicitly with `backend.DatabaseMigrator`; the API never migrates the database at startup.
 
 Disposable database integration setup is documented in `docs/integration-test-runbook.md`; it uses MariaDB and is separate from Jarvis.
+
+Pilot users are created explicitly with `backend.IdentityProvisioner`; no credentials are seeded in source control.

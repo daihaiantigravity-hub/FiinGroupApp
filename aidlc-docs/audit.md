@@ -93,6 +93,12 @@
 - Added a runbook for migration, store verification and cleanup.
 - Did not start containers or connect to any database.
 
+## 2026-08-12 — Explicit pilot user provisioning
+
+- Added `backend.IdentityProvisioner` with hidden password input and PBKDF2 hashing.
+- Provisioning requires explicit confirmation of `FiinGroupApp.Identity`.
+- No credentials or seed users were added to the repository.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
