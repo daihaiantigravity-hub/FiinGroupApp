@@ -1,4 +1,4 @@
-import type { AuthUser, LoginOutcome, OtpMethod } from './authTypes';
+import type { AuthUser, LoginOutcome, OtpMethod, PermissionMap } from './authTypes';
 
 type LegacyResponse = Record<string, unknown>;
 
@@ -6,13 +6,15 @@ const legacyBaseUrl = import.meta.env.VITE_LEGACY_API_BASE_URL ?? '/api';
 let accessToken: string | null = null;
 
 function mapUser(value: unknown): AuthUser {
-  const user = (value ?? {}) as LegacyResponse;
+  const raw = (value ?? {}) as LegacyResponse;
+  const user = (raw.user ?? raw) as LegacyResponse;
   return {
     id: typeof user.id === 'number' ? user.id : undefined,
     login: String(user.login ?? ''),
     fullName: typeof user.fullName === 'string' ? user.fullName : undefined,
     roles: Array.isArray(user.roles) ? user.roles.map(String) : [],
     positionsName: typeof user.positions_name === 'string' ? user.positions_name : undefined,
+    avatarUrl: typeof user.avatar_base64 === 'string' ? user.avatar_base64 : undefined,
   };
 }
 
@@ -50,6 +52,10 @@ export const legacyAuthClient = {
   },
 
   async me(): Promise<AuthUser> { return mapUser(await request('/auth/me')); },
+  async permissions(): Promise<PermissionMap> {
+    const payload = await request<LegacyResponse>('/auth/my-permissions');
+    return (payload.data ?? {}) as PermissionMap;
+  },
 
   async logout(): Promise<void> {
     try { await request('/auth/logout', { method: 'POST' }); } finally { accessToken = null; }
