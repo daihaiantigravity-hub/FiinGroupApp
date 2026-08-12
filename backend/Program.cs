@@ -1,13 +1,21 @@
 using Microsoft.AspNetCore.Diagnostics;
 using FiinGroupApp.Api.Auth;
+using FiinGroupApp.Api.Database;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
+var identityOptions = new IdentityStoreOptions
+{
+    Enabled = builder.Configuration.GetValue<bool>("IdentityStore:Enabled"),
+    ConnectionString = builder.Configuration.GetConnectionString("Identity")
+};
+if (identityOptions.Enabled && string.IsNullOrWhiteSpace(identityOptions.ConnectionString))
+    throw new InvalidOperationException("IdentityStore is enabled but ConnectionStrings:Identity is not configured.");
 builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
-if (builder.Configuration.GetValue<bool>("IdentityStore:Enabled") && !string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Identity")))
-    builder.Services.AddScoped<IUserStore>(sp => new MySqlUserStore(builder.Configuration.GetConnectionString("Identity")!, sp.GetRequiredService<IPasswordHasher>()));
+if (identityOptions.Enabled)
+    builder.Services.AddScoped<IUserStore>(sp => new MySqlUserStore(identityOptions.ConnectionString!, sp.GetRequiredService<IPasswordHasher>()));
 else
     builder.Services.AddSingleton<IUserStore, DevelopmentUserStore>();
 builder.Services.AddScoped<IAuthService, AuthService>();

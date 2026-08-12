@@ -59,6 +59,12 @@
 - Added PBKDF2 password hashing and a backend unit test project.
 - Default configuration remains disabled and rejects all credentials.
 
+## 2026-08-12 — Migration safety boundary
+
+- Added an identity migration manifest and explicit startup validation.
+- The API now fails fast if identity mode is enabled without a connection string.
+- Database migrations remain an explicit operator/deployment action, never an application-startup action.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.

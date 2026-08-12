@@ -1,0 +1,13 @@
+{
+  "database": "FiinGroupApp.Identity",
+  "format": 1,
+  "migrations": [
+    {
+      "id": "001_identity",
+      "file": "001_identity.sql",
+      "sha256": "DDCAD8569B899626221DC72C3EF6AE43AB00AC9D26181F05AA2826646CD29B2A",
+      "destructive": false,
+      "requiresApproval": true
+    }
+  ]
+}
