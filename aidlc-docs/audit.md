@@ -47,6 +47,12 @@
 - Added the refreshed baseline without modifying the legacy source.
 - Marked imported historical counts as context requiring revalidation.
 
+## 2026-08-12 — Identity store schema
+
+- Added a separate, unseeded identity schema for users, roles, permissions, sessions and 2FA challenges.
+- Documented encryption, hashing, migration and rollback constraints.
+- Did not connect the application or modify the Jarvis database.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
