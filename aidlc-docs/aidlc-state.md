@@ -23,6 +23,7 @@
 ### CONSTRUCTION
 
 - [ ] Application Platform
+- [ ] Authentication and user profile
 
 ### OPERATIONS
 
