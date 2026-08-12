@@ -40,3 +40,9 @@
 - Recorded `FiinGroup.Jarvis` as the trusted behavioral and code-comparison source.
 - Added migration catalog and source-to-target comparison workflow.
 - Preserved the separate new user store as the target ownership model.
+
+## 2026-08-12 — Legacy baseline refreshed
+
+- Recounted current JavaScript, HTML, CSS, SQL, route, migration and worker surfaces from the legacy repository.
+- Added the refreshed baseline without modifying the legacy source.
+- Marked imported historical counts as context requiring revalidation.

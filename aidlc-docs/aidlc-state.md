@@ -30,6 +30,7 @@
 - Legacy Jarvis is the trusted behavioral/source reference.
 - FiinGroupApp owns the target implementation and future user/permission store.
 - Migration is validated by source-to-target comparison artifacts and tests.
+- Current source inventory refreshed on 2026-08-12; see `inception/reverse-engineering/current-baseline.md`.
 
 ### OPERATIONS
 

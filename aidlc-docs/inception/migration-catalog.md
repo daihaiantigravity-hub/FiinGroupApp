@@ -17,3 +17,7 @@
 ## Comparison deliverable per unit
 
 Each unit must add a source-to-target mapping, API contract comparison, permission matrix, data impact note, compatibility fixtures, and rollback note before acceptance.
+
+## Baseline reference
+
+Use `reverse-engineering/current-baseline.md` for the latest static inventory. Earlier imported reverse-engineering documents remain useful context but must not override current source measurements.
