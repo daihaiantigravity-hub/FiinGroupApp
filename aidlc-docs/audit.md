@@ -28,3 +28,9 @@
 - Added React auth state permissions, protected routes, logout and profile view.
 - Preserved in-memory token handling and legacy rollback boundary.
 - Frontend and backend verification remain green.
+
+## 2026-08-12 — Authentication contract tests
+
+- Refactored the legacy auth adapter to support injected base URL and fetch implementation.
+- Added contract tests for authenticated login, OTP/setup outcomes, bearer propagation, safe errors and logout token clearing.
+- All frontend tests pass.
