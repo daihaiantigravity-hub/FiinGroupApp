@@ -116,6 +116,12 @@
 - Added unit coverage for token randomness and one-way hashing.
 - Kept session store unregistered until access-token, cookie and 2FA acceptance gates are complete.
 
+## 2026-08-13 — Target development login slice
+
+- Added an environment-configured, Development-only user store for local target-login smoke tests.
+- Added React `target-dev` auth mode and `/api/v2` Vite proxy while retaining legacy mode as default.
+- Explicitly excluded production use, OTP and persistent session claims from this slice.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.

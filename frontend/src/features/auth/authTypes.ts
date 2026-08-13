@@ -1,5 +1,5 @@
 export type AuthUser = {
-  id?: number;
+  id?: number | string;
   login: string;
   fullName?: string;
   roles?: string[];

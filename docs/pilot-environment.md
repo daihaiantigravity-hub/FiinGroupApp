@@ -24,6 +24,8 @@ The connection string must not be committed to source control. If the store is e
 
 The React app currently uses the legacy auth adapter and Vite proxies `/api` to Jarvis. This remains the default pilot mode until the target session/2FA implementation passes the acceptance checklist.
 
+For a local target-login smoke test, configure the .NET Development environment with `DevelopmentAuth:Username`, `DevelopmentAuth:Password` and `DevelopmentAuth:DisplayName`, then start the frontend with `VITE_AUTH_MODE=target-dev`. The target-dev store is available only when `ASPNETCORE_ENVIRONMENT=Development`; it is not a production authentication mechanism and does not yet provide OTP or persistent sessions.
+
 ## Required pilot evidence
 
 - Migration checksum and execution record.

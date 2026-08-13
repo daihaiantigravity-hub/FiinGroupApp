@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
 import { legacyAuthClient } from './legacyAuthClient';
 import type { AuthState } from './authTypes';
+import { loginAgainstTarget } from './targetAuthClient';
 
 type AuthContextValue = AuthState & {
   login: (username: string, password: string) => Promise<void>;
@@ -16,6 +17,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const login = async (username: string, password: string) => {
     setState({ ...initialState, status: 'authenticating' });
     try {
+      if ((import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev') {
+        const target = await loginAgainstTarget(username, password);
+        setState({ status: 'authenticated', user: target.outcome.user, challenge: null, error: null, permissions: target.permissions });
+        return;
+      }
       const result = await legacyAuthClient.login(username, password);
       if (result.kind === 'authenticated') {
         const permissions = await legacyAuthClient.permissions();
@@ -25,6 +31,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } catch (error) { setState({ ...initialState, status: 'error', error: error instanceof Error ? error.message : 'Đăng nhập thất bại.' }); }
   };
   const verifyOtp = async (code: string) => {
+    if ((import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev') { setState((current) => ({ ...current, error: 'Target-dev login chưa hỗ trợ OTP; hãy dùng legacy mode để test OTP/TOTP.' })); return; }
     if (!state.challenge) return;
     try {
       const result = await legacyAuthClient.verifyOtp(state.challenge.otpToken, code);

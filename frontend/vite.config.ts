@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
+        '/api/v2': { target: env.TARGET_API_PROXY_TARGET ?? 'http://localhost:5080', changeOrigin: true },
         '/api': { target: legacyTarget, changeOrigin: true },
         '/uploads': { target: legacyTarget, changeOrigin: true },
       },
