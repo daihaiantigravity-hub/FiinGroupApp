@@ -110,6 +110,12 @@
 - Added a health check that distinguishes disabled compatibility mode from an unreachable enabled identity database.
 - The check never runs against Jarvis because the identity connection is separately configured and the new database name remains enforced by tooling.
 
+## 2026-08-13 — TFS domain login slice
+
+- Added target `/api/v2/auth/login` support for `authProvider=tfs` with domain username parsing and NTLM connectionData validation.
+- Added React provider/domain fields and preserved the same legacy request contract.
+- TFS credentials are request-scoped and are not logged or persisted.
+
 ## 2026-08-13 — Refresh session persistence
 
 - Added opaque refresh-token generation, SHA-256 hashing and MySQL session create/rotate/revoke operations.

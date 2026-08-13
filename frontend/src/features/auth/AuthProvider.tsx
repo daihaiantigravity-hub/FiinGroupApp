@@ -4,7 +4,7 @@ import type { AuthState } from './authTypes';
 import { loginAgainstTarget } from './targetAuthClient';
 
 type AuthContextValue = AuthState & {
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, authProvider?: string, domain?: string) => Promise<void>;
   verifyOtp: (code: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -14,15 +14,15 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AuthState>(initialState);
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, authProvider = 'local', domain = '') => {
     setState({ ...initialState, status: 'authenticating' });
     try {
       if ((import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev') {
-        const target = await loginAgainstTarget(username, password);
+        const target = await loginAgainstTarget(username, password, authProvider, domain);
         setState({ status: 'authenticated', user: target.outcome.user, challenge: null, error: null, permissions: target.permissions });
         return;
       }
-      const result = await legacyAuthClient.login(username, password);
+      const result = await legacyAuthClient.login(username, password, authProvider, domain);
       if (result.kind === 'authenticated') {
         const permissions = await legacyAuthClient.permissions();
         setState({ status: 'authenticated', user: result.user, challenge: null, error: null, permissions });

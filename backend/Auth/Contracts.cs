@@ -1,6 +1,6 @@
 namespace FiinGroupApp.Api.Auth;
 
-public sealed record LoginRequest(string Username, string Password);
+public sealed record LoginRequest(string Username, string Password, string AuthProvider = "local", string? Domain = null);
 public sealed record UserProfile(Guid Id, string Username, string DisplayName, string? Email, IReadOnlyCollection<string> Roles);
 public sealed record PermissionSet(IReadOnlyDictionary<string, PermissionFlags> Forms, IReadOnlySet<string> Actions);
 public sealed record PermissionFlags(bool CanAccess, bool CanView, bool CanAdd, bool CanEdit, bool CanDelete, bool CanImport, bool CanExport, bool CanApprove, bool CanPay, bool CanComplete);

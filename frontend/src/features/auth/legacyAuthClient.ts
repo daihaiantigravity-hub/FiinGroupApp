@@ -33,8 +33,8 @@ export function createLegacyAuthClient(options: AuthClientOptions = {}) {
   }
 
   return {
-    async login(username: string, password: string): Promise<LoginOutcome> {
-      const payload = await request<LegacyResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    async login(username: string, password: string, authProvider = 'local', domain = ''): Promise<LoginOutcome> {
+      const payload = await request<LegacyResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password, authProvider, domain }) });
       if (payload.requireTOTP === true) return { kind: 'otp_required', otpToken: String(payload.otpToken ?? ''), method: String(payload.method ?? 'totp') as OtpMethod, maskedEmail: typeof payload.maskedEmail === 'string' ? payload.maskedEmail : undefined, user: mapUser(payload.user) };
       if (payload.requireSetup === true) return { kind: 'setup_required', setupToken: String(payload.setupToken ?? ''), user: mapUser(payload.user) };
       accessToken = String(payload.token ?? '');
