@@ -17,3 +17,8 @@ public interface IAuthService
 {
     Task<AuthenticatedUser?> AuthenticateAsync(LoginRequest request, CancellationToken cancellationToken);
 }
+
+public interface ITfsIdentityResolver
+{
+    Task<AuthenticatedUser?> ResolveAsync(TfsIdentity identity, CancellationToken cancellationToken);
+}

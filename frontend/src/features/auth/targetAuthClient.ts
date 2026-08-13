@@ -1,4 +1,5 @@
 import type { ActionPermissionMap, AuthUser, LoginOutcome, PermissionMap } from './authTypes';
+import type { LegacyDashboardStats } from './legacyAuthClient';
 
 type TargetResponse = { user?: Record<string, unknown>; permissions?: { forms?: PermissionMap; actions?: unknown } } & Record<string, unknown>;
 
@@ -36,4 +37,14 @@ export async function restoreTargetSession(): Promise<{ user: AuthUser; permissi
 
 export async function logoutTarget(): Promise<void> {
   await fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'include' });
+}
+
+export async function targetDashboardStats(): Promise<LegacyDashboardStats> {
+  const response = await fetch('/api/v2/dashboard/stats', { credentials: 'include' });
+  const payload = await response.json().catch(() => ({})) as TargetResponse;
+  if (!response.ok) {
+    const nestedError = payload.error as Record<string, unknown> | undefined;
+    throw new Error(String(nestedError?.message ?? payload.message ?? `Target dashboard failed: ${response.status}`));
+  }
+  return payload.data as LegacyDashboardStats;
 }

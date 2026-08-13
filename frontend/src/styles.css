@@ -21,6 +21,7 @@ dt { color: #52606d; } dd { margin: 0; font-weight: 600; }
 .eyebrow { margin: 0; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .muted { margin: 0; }
 .dashboard-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.legacy-stats-grid { border-top: 2px solid #dbeafe; padding-top: 1rem; }
 .platform-card, .platform-status-list, .migration-note { background: white; border-radius: .75rem; box-shadow: 0 4px 18px #102a4310; }
 .platform-card { display: grid; gap: .35rem; padding: 1.2rem; min-height: 8rem; }
 .platform-card strong { font-size: 1.35rem; overflow-wrap: anywhere; }

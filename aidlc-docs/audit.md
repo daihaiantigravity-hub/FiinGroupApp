@@ -152,3 +152,33 @@
 - Added a React read-only platform dashboard for authenticated pilot users.
 - Added target API ping/health visibility and permission/session summaries.
 - Kept Jarvis business dashboard data behind a documented read-only adapter boundary; no legacy data mutation or fabricated target metrics were introduced.
+
+## 2026-08-13 — Legacy dashboard compatibility adapter
+
+- Verified Jarvis global JWT protection for `/api/dashboard/*`.
+- Added a React read-only adapter for `/api/dashboard/stats` in legacy mode only.
+- Kept target TFS mode out of legacy business data until token exchange or a .NET read model is approved.
+
+## 2026-08-13 — Target Dashboard read model
+
+- Added disabled-by-default `/api/v2/dashboard/stats` read model with a separate legacy operational connection boundary.
+- Preserved Jarvis aggregate semantics for employee, project, revenue and pending evaluation statistics.
+- Added safe configuration/error handling and documented the read-only clone acceptance gate.
+- Added fail-closed `dashboard` form access/view authorization; TFS accounts without mapped permissions cannot read business aggregates.
+
+## 2026-08-13 — TFS external identity mapping boundary
+
+- Added the unseeded `app_external_identities` schema and target resolver contract.
+- Kept mapping opt-in; TFS login never provisions a target user or permission.
+- Added `Tfs:RequireIdentityMapping` fail-closed behavior for approved identity-store deployments.
+- Added an explicit mapping provisioner with database confirmation and no automatic role/permission grants.
+
+## 2026-08-13 — Mapping provisioner input validation
+
+- Added friendly validation for placeholder and malformed MySQL connection strings.
+- Added safe connection failure guidance without printing connection values or secrets.
+
+## 2026-08-13 — Migration runner manifest compatibility
+
+- Fixed manifest deserialization to accept the repository's lower-case JSON property names.
+- Added explicit validation for the target database and non-empty migration list before execution.

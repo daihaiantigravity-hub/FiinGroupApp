@@ -2,8 +2,32 @@ using MySqlConnector;
 
 namespace FiinGroupApp.Api.Auth;
 
-public sealed class MySqlUserStore(string connectionString, IPasswordHasher passwordHasher) : IUserStore
+public sealed class MySqlUserStore(string connectionString, IPasswordHasher passwordHasher) : IUserStore, ITfsIdentityResolver
 {
+    public async Task<AuthenticatedUser?> ResolveAsync(TfsIdentity identity, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var candidates = new[]
+            {
+                identity.IdentityId,
+                identity.UniqueName,
+                identity.Domain is null ? identity.Username : $"{identity.Domain}\\{identity.Username}"
+            }.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var subject in candidates)
+            {
+                var user = await FindExternalUserAsync(subject, cancellationToken);
+                if (user is not null) return new AuthenticatedUser(user, await GetPermissionsAsync(user, cancellationToken));
+            }
+            return null;
+        }
+        catch (MySqlException)
+        {
+            throw new TfsIdentityMappingException("TFS identity store is temporarily unavailable.", "TFS_IDENTITY_STORE_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
     public async Task<UserProfile?> FindByUsernameAsync(string username, CancellationToken cancellationToken)
     {
         await using var connection = new MySqlConnection(connectionString);
@@ -51,6 +75,25 @@ public sealed class MySqlUserStore(string connectionString, IPasswordHasher pass
         return new PermissionSet(forms, actions);
     }
 
+    private async Task<UserProfile?> FindExternalUserAsync(string subject, CancellationToken cancellationToken)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new MySqlCommand("""
+            SELECT u.id, u.username, u.display_name, u.email
+            FROM app_external_identities x
+            INNER JOIN app_users u ON u.id = x.user_id
+            WHERE x.provider = 'tfs' AND x.subject = @subject
+              AND u.status = 'ACTIVE'
+              AND (u.locked_until IS NULL OR u.locked_until < UTC_TIMESTAMP(6))
+            LIMIT 1
+            """, connection);
+        command.Parameters.AddWithValue("@subject", subject);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return new UserProfile(reader.GetGuid("id"), reader.GetString("username"), reader.GetString("display_name"), reader.IsDBNull(reader.GetOrdinal("email")) ? null : reader.GetString("email"), []);
+    }
+
     private static PermissionFlags Merge(PermissionFlags? current, string action)
     {
         var value = current ?? new PermissionFlags(false, false, false, false, false, false, false, false, false, false);
@@ -62,4 +105,10 @@ public sealed class MySqlUserStore(string connectionString, IPasswordHasher pass
             "COMPLETE" => value with { CanComplete = true }, _ => value
         };
     }
+}
+
+public sealed class TfsIdentityMappingException(string message, string code, int statusCode) : Exception(message)
+{
+    public string Code { get; } = code;
+    public int StatusCode { get; } = statusCode;
 }

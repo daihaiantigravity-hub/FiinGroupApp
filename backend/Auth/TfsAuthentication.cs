@@ -10,10 +10,11 @@ public sealed class TfsOptions
     public bool Enabled { get; init; }
     public string? BaseUrl { get; init; }
     public int TimeoutSeconds { get; init; } = 15;
+    public bool RequireIdentityMapping { get; init; }
 }
 
 public sealed record TfsIdentity(string Username, string? Domain, string UniqueName, string DisplayName, string IdentityId);
-public sealed record TfsLoginResult(UserProfile User, PermissionSet Permissions);
+public sealed record TfsLoginResult(UserProfile User, PermissionSet Permissions, TfsIdentity Identity);
 
 public interface ITfsAuthenticationService
 {
@@ -60,7 +61,7 @@ public sealed class TfsAuthenticationService(TfsOptions options) : ITfsAuthentic
             var fullName = string.IsNullOrWhiteSpace(identity.DisplayName) ? login : identity.DisplayName;
             var id = string.IsNullOrWhiteSpace(identity.Id) ? login : identity.Id;
             var user = new UserProfile(GuidFromTfsId(id), login, fullName, null, []);
-            return new TfsLoginResult(user, new PermissionSet(new Dictionary<string, PermissionFlags>(), new HashSet<string>()));
+            return new TfsLoginResult(user, new PermissionSet(new Dictionary<string, PermissionFlags>(), new HashSet<string>()), new TfsIdentity(username, domain, identity.UniqueName ?? string.Empty, fullName, id));
         }
         catch (TfsAuthenticationException) { throw; }
         catch (JsonException) { throw new TfsAuthenticationException("TFS returned an invalid connectionData response.", "TFS_INVALID_RESPONSE", StatusCodes.Status503ServiceUnavailable); }

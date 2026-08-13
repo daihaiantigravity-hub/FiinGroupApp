@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using FiinGroupApp.Api.Auth;
 using FiinGroupApp.Api.Database;
+using FiinGroupApp.Api.Dashboard;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
@@ -15,7 +16,8 @@ var tfsOptions = new TfsOptions
 {
     Enabled = builder.Configuration.GetValue<bool>("Tfs:Enabled"),
     BaseUrl = builder.Configuration["Tfs:BaseUrl"],
-    TimeoutSeconds = builder.Configuration.GetValue("Tfs:TimeoutSeconds", 15)
+    TimeoutSeconds = builder.Configuration.GetValue("Tfs:TimeoutSeconds", 15),
+    RequireIdentityMapping = builder.Configuration.GetValue<bool>("Tfs:RequireIdentityMapping")
 };
 var sessionOptions = new TargetSessionOptions
 {
@@ -23,16 +25,28 @@ var sessionOptions = new TargetSessionOptions
     LifetimeHours = builder.Configuration.GetValue("Auth:SessionLifetimeHours", 8),
     SecureCookie = builder.Configuration.GetValue("Auth:SecureCookie", false)
 };
+var dashboardOptions = new DashboardOptions
+{
+    LegacyStatsEnabled = builder.Configuration.GetValue<bool>("Dashboard:LegacyStatsEnabled"),
+    ConnectionString = builder.Configuration.GetConnectionString("LegacyOperational")
+};
+if (dashboardOptions.LegacyStatsEnabled && string.IsNullOrWhiteSpace(dashboardOptions.ConnectionString))
+    throw new InvalidOperationException("Dashboard:LegacyStatsEnabled is true but ConnectionStrings:LegacyOperational is not configured.");
 if (identityOptions.Enabled && string.IsNullOrWhiteSpace(identityOptions.ConnectionString))
     throw new InvalidOperationException("IdentityStore is enabled but ConnectionStrings:Identity is not configured.");
 builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 if (identityOptions.Enabled)
-    builder.Services.AddScoped<IUserStore>(sp => new MySqlUserStore(identityOptions.ConnectionString!, sp.GetRequiredService<IPasswordHasher>()));
+{
+    builder.Services.AddSingleton<MySqlUserStore>(sp => new MySqlUserStore(identityOptions.ConnectionString!, sp.GetRequiredService<IPasswordHasher>()));
+    builder.Services.AddSingleton<IUserStore>(sp => sp.GetRequiredService<MySqlUserStore>());
+    builder.Services.AddSingleton<ITfsIdentityResolver>(sp => sp.GetRequiredService<MySqlUserStore>());
+}
 else
     builder.Services.AddSingleton<IUserStore>(sp => new DevelopmentUserStore(builder.Configuration, sp.GetRequiredService<IPasswordHasher>(), builder.Environment.IsDevelopment()));
 builder.Services.AddHealthChecks().AddCheck("identity-store", new IdentityStoreHealthCheck(identityOptions.ConnectionString, identityOptions.Enabled));
 builder.Services.AddSingleton<ITfsAuthenticationService>(new TfsAuthenticationService(tfsOptions));
 builder.Services.AddSingleton<ITargetSessionStore>(new InMemoryTargetSessionStore(sessionOptions));
+builder.Services.AddSingleton<IDashboardStatsReader>(new MySqlDashboardStatsReader(dashboardOptions));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"])
@@ -64,9 +78,18 @@ app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth
         try
         {
             var result = await tfs.AuthenticateAsync(request, cancellationToken);
-            authenticated = new AuthenticatedUser(result.User, result.Permissions);
+            var resolver = app.Services.GetService<ITfsIdentityResolver>();
+            var mapped = resolver is null ? null : await resolver.ResolveAsync(result.Identity, cancellationToken);
+            if (mapped is not null) authenticated = mapped;
+            else if (tfsOptions.RequireIdentityMapping)
+                throw new TfsAuthenticationException("TFS identity is not mapped to a FiinGroupApp user.", "TFS_IDENTITY_NOT_MAPPED", StatusCodes.Status403Forbidden);
+            else authenticated = new AuthenticatedUser(result.User, result.Permissions);
         }
         catch (TfsAuthenticationException exception)
+        {
+            return Results.Json(new { success = false, message = exception.Message, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+        }
+        catch (TfsIdentityMappingException exception)
         {
             return Results.Json(new { success = false, message = exception.Message, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
         }
@@ -111,6 +134,24 @@ app.MapGet("/api/v2/auth/permissions", (HttpRequest request, ITargetSessionStore
     return authenticated is null
         ? Results.Unauthorized()
         : Results.Ok(new { success = true, permissions = authenticated.Permissions });
+});
+app.MapGet("/api/v2/dashboard/stats", async (HttpRequest request, ITargetSessionStore sessions, IDashboardStatsReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId)) return Results.Unauthorized();
+    var authenticated = sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!DashboardAuthorization.CanRead(authenticated))
+        return Results.Json(new { success = false, message = "Dashboard permission is required.", error = new { code = "DASHBOARD_FORBIDDEN", message = "Dashboard permission is required." } }, statusCode: StatusCodes.Status403Forbidden);
+    try
+    {
+        var stats = await reader.ReadAsync(cancellationToken);
+        return Results.Ok(new { success = true, data = stats });
+    }
+    catch (DashboardStatsException exception)
+    {
+        return Results.Json(new { success = false, message = exception.Message, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
 });
 app.MapPost("/api/v2/auth/logout", (HttpRequest request, HttpResponse response, ITargetSessionStore sessions) =>
 {

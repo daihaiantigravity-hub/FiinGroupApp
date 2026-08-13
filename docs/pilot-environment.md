@@ -34,6 +34,15 @@ Use the same base URL that Jarvis reads from `TFS_BASE_URL`. Do not append `/_ap
 
 After successful TFS validation, the pilot API issues an HttpOnly session cookie. The session is in-memory and is intended for internal technical testing only; it is cleared when the API restarts. `/api/v2/auth/session` restores the login after a browser refresh and `/api/v2/auth/logout` clears it.
 
+The target Dashboard read model is disabled by default. To enable it, configure a dedicated read-only connection to the legacy operational database; never reuse the identity connection and never commit the connection string:
+
+```powershell
+$env:Dashboard__LegacyStatsEnabled = "true"
+$env:ConnectionStrings__LegacyOperational = "<read-only legacy connection string>"
+```
+
+TFS-to-target user mapping is opt-in. After applying the reviewed identity migration and creating an explicit `app_external_identities` row, set `$env:Tfs__RequireIdentityMapping = "true"` to reject unmapped TFS users. The application never creates that mapping during login.
+
 ## Compatibility mode
 
 The React app currently uses the legacy auth adapter and Vite proxies `/api` to Jarvis. This remains the default pilot mode until the target session/2FA implementation passes the acceptance checklist.

@@ -28,4 +28,21 @@ describe('legacyAuthClient contract', () => {
     await client.permissions();
     expect(new Headers(fetchImpl.mock.calls[3][1]?.headers).get('Authorization')).toBeNull();
   });
+
+  it('maps read-only Jarvis dashboard stats and sends the bearer token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ token: 'jwt-dashboard', user: { login: 'alice' } })).mockResolvedValueOnce(response({ data: {
+      employees: { total: 12, new_this_month: 2 }, projects: { active: 4, total: 9, new: 1 }, revenue: { total: 1250000, display: '1M', ytd_label: 'T01-T08/2026' }, pending: { count: 3 },
+    } }));
+    const client = createLegacyAuthClient({ fetchImpl });
+    await client.login('alice', 'secret');
+    await expect(client.dashboardStats()).resolves.toMatchObject({ employees: { total: 12 }, projects: { active: 4 }, revenue: { display: '1M' }, pending: { count: 3 } });
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).get('Authorization')).toBe('Bearer jwt-dashboard');
+  });
+
+  it('does not expose legacy dashboard data when Jarvis rejects the session', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ token: 'jwt-dashboard', user: { login: 'alice' } })).mockResolvedValueOnce(response({ message: 'No token provided' }, 401));
+    const client = createLegacyAuthClient({ fetchImpl });
+    await client.login('alice', 'secret');
+    await expect(client.dashboardStats()).rejects.toThrow('No token provided');
+  });
 });

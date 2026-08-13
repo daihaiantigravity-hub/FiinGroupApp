@@ -20,7 +20,9 @@ if (!string.Equals(builder.Database, "FiinGroupApp.Identity", StringComparison.O
 
 var manifestPath = argsMap.GetValueOrDefault("manifest") ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "backend", "Database", "Migrations", "migrations.json"));
 if (!File.Exists(manifestPath)) { Console.Error.WriteLine($"Manifest not found: {manifestPath}"); return 4; }
-var manifest = JsonSerializer.Deserialize<MigrationManifest>(await File.ReadAllTextAsync(manifestPath)) ?? throw new InvalidOperationException("Invalid migration manifest.");
+var manifest = JsonSerializer.Deserialize<MigrationManifest>(await File.ReadAllTextAsync(manifestPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+if (manifest is null || !string.Equals(manifest.Database, "FiinGroupApp.Identity", StringComparison.OrdinalIgnoreCase) || manifest.Migrations is null || manifest.Migrations.Length == 0)
+    throw new InvalidOperationException("Invalid migration manifest: expected database FiinGroupApp.Identity and a non-empty migrations list.");
 
 await using var connection = new MySqlConnection(connectionString);
 await connection.OpenAsync();

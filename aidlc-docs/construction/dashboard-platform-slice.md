@@ -25,4 +25,4 @@ The target React dashboard therefore does not display fabricated business number
 
 ## Next boundary
 
-Select the first business read model, document its source tables and permission code, then implement a compatibility client or `/api/v2` read-only adapter. Do not start with revenue/payroll data before the permission and sensitive-data review is approved.
+The first compatibility client for `GET /api/dashboard/stats` is now available in legacy mode. Target TFS mode remains platform-only until a token exchange or `/api/v2` read-only dashboard model is approved. Do not start with revenue/payroll data before the permission and sensitive-data review is approved.

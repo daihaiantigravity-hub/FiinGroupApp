@@ -26,6 +26,6 @@ public sealed class DevelopmentUserStore(IConfiguration configuration, IPassword
     public Task<PermissionSet> GetPermissionsAsync(UserProfile user, CancellationToken cancellationToken)
     {
         var flags = new PermissionFlags(true, true, true, true, true, true, true, true, true, true);
-        return Task.FromResult(new PermissionSet(new Dictionary<string, PermissionFlags> { ["__development__"] = flags }, new HashSet<string> { "__development__:ALL" }));
+        return Task.FromResult(new PermissionSet(new Dictionary<string, PermissionFlags> { ["__development__"] = flags, ["dashboard"] = flags }, new HashSet<string> { "__development__:ALL" }));
     }
 }

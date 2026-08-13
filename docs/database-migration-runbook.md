@@ -10,6 +10,18 @@
 
 8. Update and verify `backend/Database/Migrations/migrations.json` before applying any migration.
 
+## TFS identity mapping
+
+After `002_external_identities.sql` is applied and an approved target user exists, create an explicit mapping with the dedicated provisioner:
+
+```powershell
+cd backend.IdentityMappingProvisioner
+$identityConnection = "Server=localhost;Port=33306;Database=FiinGroupApp.Identity;User ID=fiingroup_test;Password=<local-secret>"
+dotnet run -- --connection $identityConnection --confirm-database FiinGroupApp.Identity --username "<target-user>" --provider tfs --subject "STOXPLUS-CORP\Hai.NguyenVan"
+```
+
+Replace `<local-secret>` and `<target-user>` with real values. The `--subject` can be the TFS `authenticatedUser.id`, `uniqueName`, or `DOMAIN\username`; it must not remain a placeholder. The command refuses a different database, refuses to create users, refuses to overwrite another mapping, and does not grant roles or permissions. Permission grants require a separate reviewed operation.
+
 ## Migration runner
 
 The standalone runner is `backend.DatabaseMigrator`. It refuses any database other than the explicitly confirmed `FiinGroupApp.Identity` database and verifies migration checksums before execution.

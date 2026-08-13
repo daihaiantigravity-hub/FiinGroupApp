@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider';
+import { legacyAuthClient, type LegacyDashboardStats } from '../auth/legacyAuthClient';
+import { targetDashboardStats } from '../auth/targetAuthClient';
 
 type ServiceStatus = 'checking' | 'online' | 'offline';
 
@@ -7,6 +9,9 @@ export default function DashboardPage() {
   const auth = useAuth();
   const [apiStatus, setApiStatus] = useState<ServiceStatus>('checking');
   const [healthStatus, setHealthStatus] = useState<ServiceStatus>('checking');
+  const [legacyStats, setLegacyStats] = useState<LegacyDashboardStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const legacyMode = (import.meta.env.VITE_AUTH_MODE ?? 'legacy') !== 'target-dev';
 
   const checkPlatform = useCallback(async () => {
     setApiStatus('checking');
@@ -20,6 +25,11 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => { void checkPlatform(); }, [checkPlatform]);
+  useEffect(() => {
+    if (!legacyMode) return;
+    const readStats = legacyMode ? legacyAuthClient.dashboardStats() : targetDashboardStats();
+    readStats.then(setLegacyStats).catch((error) => setStatsError(error instanceof Error ? error.message : 'Không tải được dashboard.'));
+  }, [legacyMode]);
 
   const statusLabel = (status: ServiceStatus) => status === 'checking' ? 'Đang kiểm tra…' : status === 'online' ? 'Hoạt động' : 'Không khả dụng';
   const formPermissionCount = Object.keys(auth.permissions).length;
@@ -36,10 +46,16 @@ export default function DashboardPage() {
       <article className="platform-card"><span className="card-label">Form permissions</span><strong>{formPermissionCount}</strong><small>Snapshot từ target session</small></article>
       <article className="platform-card"><span className="card-label">Action permissions</span><strong>{actionPermissionCount}</strong><small>Snapshot từ target session</small></article>
     </div>
+    {legacyMode && legacyStats && <div className="dashboard-grid legacy-stats-grid">
+      <article className="platform-card"><span className="card-label">Nhân sự legacy</span><strong>{legacyStats.employees.total}</strong><small>+{legacyStats.employees.new_this_month} tháng này</small></article>
+      <article className="platform-card"><span className="card-label">Dự án đang chạy</span><strong>{legacyStats.projects.active}</strong><small>{legacyStats.projects.total} tổng số</small></article>
+      <article className="platform-card"><span className="card-label">Doanh thu YTD</span><strong>{legacyStats.revenue.display}</strong><small>{legacyStats.revenue.ytd_label}</small></article>
+      <article className="platform-card"><span className="card-label">Đang chờ xử lý</span><strong>{legacyStats.pending.count}</strong><small>Đọc từ Jarvis legacy</small></article>
+    </div>}
     <div className="platform-status-list">
       <div><span>ASP.NET Core API v2</span><strong className={apiStatus}>{statusLabel(apiStatus)}</strong></div>
       <div><span>Health check</span><strong className={healthStatus}>{statusLabel(healthStatus)}</strong></div>
     </div>
-    <aside className="migration-note"><strong>Migration boundary</strong><p>Dashboard nghiệp vụ Jarvis chưa được gọi từ TFS session target. Bước tiếp theo sẽ tạo adapter read-only cho từng API legacy và kiểm thử kết quả trước khi chuyển dữ liệu sang .NET.</p></aside>
+    <aside className="migration-note"><strong>Migration boundary</strong><p>{statsError ? `Không tải được dữ liệu Dashboard: ${statsError}` : legacyMode ? 'Đang dùng compatibility adapter read-only với JWT của Jarvis.' : 'Target đang dùng read model .NET read-only. Connection legacy phải được bật rõ ràng bằng Dashboard:LegacyStatsEnabled.'}</p></aside>
   </section>;
 }

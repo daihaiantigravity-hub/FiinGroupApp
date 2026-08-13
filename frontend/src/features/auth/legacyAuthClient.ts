@@ -4,6 +4,28 @@ type LegacyResponse = Record<string, unknown>;
 type AuthClientOptions = { baseUrl?: string; fetchImpl?: typeof fetch };
 const defaultBaseUrl = import.meta.env.VITE_LEGACY_API_BASE_URL ?? '/api';
 
+export type LegacyDashboardStats = {
+  employees: { total: number; new_this_month: number };
+  projects: { active: number; total: number; new: number };
+  revenue: { total: number; display: string; ytd_label: string };
+  pending: { count: number };
+};
+
+function mapDashboardStats(value: unknown): LegacyDashboardStats {
+  const root = (value ?? {}) as Record<string, unknown>;
+  const employees = (root.employees ?? {}) as Record<string, unknown>;
+  const projects = (root.projects ?? {}) as Record<string, unknown>;
+  const revenue = (root.revenue ?? {}) as Record<string, unknown>;
+  const pending = (root.pending ?? {}) as Record<string, unknown>;
+  const numberOrZero = (candidate: unknown) => typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : Number(candidate) || 0;
+  return {
+    employees: { total: numberOrZero(employees.total), new_this_month: numberOrZero(employees.new_this_month) },
+    projects: { active: numberOrZero(projects.active), total: numberOrZero(projects.total), new: numberOrZero(projects.new) },
+    revenue: { total: numberOrZero(revenue.total), display: String(revenue.display ?? '0'), ytd_label: String(revenue.ytd_label ?? '') },
+    pending: { count: numberOrZero(pending.count) },
+  };
+}
+
 function mapUser(value: unknown): AuthUser {
   const raw = (value ?? {}) as LegacyResponse;
   const user = (raw.user ?? raw) as LegacyResponse;
@@ -47,6 +69,10 @@ export function createLegacyAuthClient(options: AuthClientOptions = {}) {
     },
     async me(): Promise<AuthUser> { return mapUser(await request('/auth/me')); },
     async permissions(): Promise<PermissionMap> { const payload = await request<LegacyResponse>('/auth/my-permissions'); return (payload.data ?? {}) as PermissionMap; },
+    async dashboardStats(): Promise<LegacyDashboardStats> {
+      const payload = await request<LegacyResponse>('/dashboard/stats');
+      return mapDashboardStats(payload.data);
+    },
     async logout(): Promise<void> { try { await request('/auth/logout', { method: 'POST' }); } finally { accessToken = null; } },
   };
 }

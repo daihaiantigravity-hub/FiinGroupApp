@@ -8,6 +8,13 @@
       "sha256": "DDCAD8569B899626221DC72C3EF6AE43AB00AC9D26181F05AA2826646CD29B2A",
       "destructive": false,
       "requiresApproval": true
+    },
+    {
+      "id": "002_external_identities",
+      "file": "002_external_identities.sql",
+      "sha256": "F8BED0EB4F720921D3A03C82F223057495216628EF130055F0A7B2B42625BD91",
+      "destructive": false,
+      "requiresApproval": true
     }
   ]
 }
