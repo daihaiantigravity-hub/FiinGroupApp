@@ -7,7 +7,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [authProvider, setAuthProvider] = useState<'local' | 'tfs'>('local');
-  const [domain, setDomain] = useState('');
+  const [domain, setDomain] = useState('STOXPLUS-CORP');
   const submitLogin = async (event: FormEvent) => { event.preventDefault(); await auth.login(username, password, authProvider, domain); };
   const submitOtp = async (event: FormEvent) => { event.preventDefault(); await auth.verifyOtp(code); };
 

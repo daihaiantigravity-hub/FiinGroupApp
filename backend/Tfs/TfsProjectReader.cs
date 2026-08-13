@@ -1,0 +1,250 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using FiinGroupApp.Api.Auth;
+
+namespace FiinGroupApp.Api.Tfs;
+
+public sealed record TfsProjectSummary(string Collection, string Id, string Name, string? Description, string? State, string? Url);
+public sealed record TfsTeamSummary(string Id, string Name, string? Description, string? Url);
+public sealed record TfsIterationSummary(string Id, string Name, string? Path, string? TimeFrame, string? Url);
+public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? Url);
+
+public interface ITfsProjectReader
+{
+    Task<IReadOnlyList<TfsProjectSummary>> GetProjectsAsync(TfsSessionCredential credential, CancellationToken cancellationToken);
+    Task<TfsProjectSummary?> GetProjectAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TfsTeamSummary>> GetTeamsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TfsIterationSummary>> GetIterationsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
+    Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collection, string? projectName, int limit, CancellationToken cancellationToken);
+}
+
+public sealed record TfsWorkItemQueryResult(string Collection, string ProjectId, int TotalAvailable, IReadOnlyList<TfsWorkItemSummary> Items);
+
+public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
+{
+    public async Task<IReadOnlyList<TfsProjectSummary>> GetProjectsAsync(TfsSessionCredential credential, CancellationToken cancellationToken)
+    {
+        using var client = CreateClient(credential);
+        var collections = await GetCollectionsAsync(client, cancellationToken);
+        var projects = new List<TfsProjectSummary>();
+        TfsProjectException? firstCollectionError = null;
+        foreach (var collection in collections)
+        {
+            try
+            {
+                var response = await SendAsync(client, $"{ValidateCollection(collection)}/_apis/projects?stateFilter=all&$top=100&api-version=2.0", cancellationToken);
+                var payload = await response.Content.ReadFromJsonAsync<TfsListResponse<TfsProjectDto>>(cancellationToken: cancellationToken) ?? new TfsListResponse<TfsProjectDto>();
+                projects.AddRange(payload.Value.Select(project => Map(collection, project)));
+            }
+            catch (TfsProjectException exception)
+            {
+                // A user may see a collection in connectionData but lack project
+                // permission there. Continue with collections that are readable.
+                firstCollectionError ??= exception;
+            }
+        }
+        if (projects.Count == 0 && firstCollectionError is not null) throw firstCollectionError;
+        return projects;
+    }
+
+    public async Task<TfsProjectSummary?> GetProjectAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(projectId)) throw new TfsProjectException("Project id is required.", "TFS_PROJECT_ID_REQUIRED", StatusCodes.Status400BadRequest);
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        using var client = CreateClient(credential);
+        var response = await SendAsync(client, $"{collection}/_apis/projects/{Uri.EscapeDataString(projectId)}?api-version=2.0", cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        var project = await response.Content.ReadFromJsonAsync<TfsProjectDto>(cancellationToken: cancellationToken);
+        return project is null ? null : Map(collection, project);
+    }
+
+    public async Task<IReadOnlyList<TfsTeamSummary>> GetTeamsAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, CancellationToken cancellationToken)
+    {
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        var project = ValidateProjectId(projectId);
+        using var client = CreateClient(credential);
+        var response = await SendAsync(client, collection + "/_apis/projects/" + Uri.EscapeDataString(project) + "/teams?%24top=100&api-version=2.0", cancellationToken);
+        var payload = await response.Content.ReadFromJsonAsync<TfsListResponse<TfsTeamDto>>(cancellationToken: cancellationToken) ?? new TfsListResponse<TfsTeamDto>();
+        return payload.Value.Select(team => new TfsTeamSummary(team.Id ?? string.Empty, team.Name ?? string.Empty, team.Description, team.Url)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<TfsIterationSummary>> GetIterationsAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, CancellationToken cancellationToken)
+    {
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        var project = ValidateProjectId(projectId);
+        using var client = CreateClient(credential);
+        var response = await SendAsync(client, collection + "/" + Uri.EscapeDataString(project) + "/_apis/work/teamsettings/iterations?api-version=2.0-preview.1", cancellationToken);
+        var payload = await response.Content.ReadFromJsonAsync<TfsListResponse<TfsIterationDto>>(cancellationToken: cancellationToken) ?? new TfsListResponse<TfsIterationDto>();
+        return payload.Value.Select(iteration => new TfsIterationSummary(iteration.Id ?? string.Empty, iteration.Name ?? string.Empty, iteration.Path, iteration.Attributes?.TimeFrame, iteration.Url)).ToArray();
+    }
+
+    public async Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, string? projectName, int limit, CancellationToken cancellationToken)
+    {
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        var project = ValidateProjectId(projectId);
+        var requestedLimit = Math.Clamp(limit <= 0 ? 100 : limit, 1, 200);
+        using var client = CreateClient(credential);
+        var projectClause = string.IsNullOrWhiteSpace(projectName) ? "@project" : "'" + projectName.Trim().Replace("'", "''") + "'";
+        var wiql = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = " + projectClause + " ORDER BY [System.Id] ASC";
+        var queryResponse = await SendPostAsync(client, collection + "/" + Uri.EscapeDataString(project) + "/_apis/wit/wiql?api-version=1.0", new { query = wiql }, cancellationToken, "WIQL");
+        var query = await queryResponse.Content.ReadFromJsonAsync<TfsWiqlResponse>(cancellationToken: cancellationToken) ?? new TfsWiqlResponse();
+        var ids = query.WorkItems.Select(item => item.Id).Where(id => id > 0).Take(requestedLimit).ToArray();
+        var items = new List<TfsWorkItemSummary>();
+        for (var index = 0; index < ids.Length; index += 100)
+        {
+            var batch = string.Join(',', ids.Skip(index).Take(100));
+            var response = await SendAsync(client, collection + "/_apis/wit/workitems?ids=" + batch + "&%24expand=relations&api-version=1.0", cancellationToken, "work item batch");
+            var payload = await response.Content.ReadFromJsonAsync<TfsListResponse<TfsWorkItemDto>>(cancellationToken: cancellationToken) ?? new TfsListResponse<TfsWorkItemDto>();
+            items.AddRange(payload.Value.Select(MapWorkItem));
+        }
+        return new TfsWorkItemQueryResult(collection, project, query.WorkItems.Count, items);
+    }
+
+    private async Task<IReadOnlyList<string>> GetCollectionsAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        var response = await SendAsync(client, "_apis/connectionData?connectOptions=1&lastChangeId=-1&lastChangeId64=-1", cancellationToken);
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (document.RootElement.TryGetProperty("locationServiceData", out var locationData)
+            && locationData.TryGetProperty("serviceDefinitions", out var definitions)
+            && definitions.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var definition in definitions.EnumerateArray())
+            {
+                if (!definition.TryGetProperty("serviceType", out var serviceType) || !string.Equals(serviceType.GetString(), "LocationService2", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!definition.TryGetProperty("locationMappings", out var mappings)) continue;
+                IEnumerable<JsonElement> entries = mappings.ValueKind == JsonValueKind.Array ? mappings.EnumerateArray() : new[] { mappings };
+                foreach (var mapping in entries)
+                {
+                    if (!mapping.TryGetProperty("location", out var location)) continue;
+                    var value = location.GetString() ?? string.Empty;
+                    var marker = value.IndexOf("/tfs/", StringComparison.OrdinalIgnoreCase);
+                    if (marker < 0) continue;
+                    var collection = value[(marker + 5)..].Trim('/');
+                    if (!string.IsNullOrWhiteSpace(collection)) names.Add(Uri.UnescapeDataString(collection));
+                }
+            }
+        }
+        if (names.Count == 0 && !string.IsNullOrWhiteSpace(options.Collection)) names.Add(options.Collection);
+        if (names.Count == 0) throw new TfsProjectException("No TFS collection is visible to this account.", "TFS_COLLECTION_NOT_FOUND", StatusCodes.Status503ServiceUnavailable);
+        return names.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(HttpClient client, string relativeUrl, CancellationToken cancellationToken, string operation = "project API")
+    {
+        try
+        {
+            return EnsureResponse(await client.GetAsync(relativeUrl, cancellationToken), operation);
+        }
+        catch (TfsProjectException) { throw; }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TfsProjectException("TFS project request timed out.", "TFS_PROJECTS_TIMEOUT", StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (HttpRequestException)
+        {
+            throw new TfsProjectException("TFS project service is unavailable.", "TFS_PROJECTS_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private HttpClient CreateClient(TfsSessionCredential credential)
+    {
+        if (!options.Enabled || string.IsNullOrWhiteSpace(options.BaseUrl))
+            throw new TfsProjectException("TFS authentication is not configured.", "TFS_DISABLED", StatusCodes.Status503ServiceUnavailable);
+        if (!Uri.TryCreate(options.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var baseUri) || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+            throw new TfsProjectException("TFS base URL must be an absolute HTTP or HTTPS URL.", "TFS_URL_INVALID", StatusCodes.Status503ServiceUnavailable);
+        var credentials = new CredentialCache();
+        credentials.Add(baseUri, "NTLM", new NetworkCredential(credential.Username, credential.Password, credential.Domain));
+        var handler = new HttpClientHandler { Credentials = credentials, PreAuthenticate = false, UseCookies = false, AllowAutoRedirect = true, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
+        var client = new HttpClient(handler) { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds)) };
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("FiinGroupApp-TFS-Project/1.0");
+        return client;
+    }
+
+    private static string ValidateCollection(string? collection)
+    {
+        var value = (collection ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(value) || value.Contains('/') || value.Contains('\\'))
+            throw new TfsProjectException("TFS collection is invalid.", "TFS_COLLECTION_INVALID", StatusCodes.Status400BadRequest);
+        return Uri.EscapeDataString(value);
+    }
+
+    private static string ValidateProjectId(string projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId)) throw new TfsProjectException("Project id is required.", "TFS_PROJECT_ID_REQUIRED", StatusCodes.Status400BadRequest);
+        return projectId.Trim();
+    }
+
+    private static TfsProjectSummary Map(string collection, TfsProjectDto project) => new(collection, project.Id ?? string.Empty, project.Name ?? string.Empty, project.Description, project.State, project.Url);
+    private static TfsWorkItemSummary MapWorkItem(TfsWorkItemDto item)
+        => new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), item.Url);
+
+    private static string? Field(Dictionary<string, JsonElement>? fields, string key)
+    {
+        if (fields is null || !fields.TryGetValue(key, out var value)) return null;
+        if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty("displayName", out var displayName)) return displayName.GetString();
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+    }
+
+    private async Task<HttpResponseMessage> SendPostAsync(HttpClient client, string relativeUrl, object body, CancellationToken cancellationToken, string operation)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(body);
+            using var content = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            var response = await client.PostAsync(relativeUrl, content, cancellationToken);
+            return EnsureResponse(response, operation);
+        }
+        catch (TfsProjectException) { throw; }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TfsProjectException("TFS project request timed out.", "TFS_PROJECTS_TIMEOUT", StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (HttpRequestException)
+        {
+            throw new TfsProjectException("TFS project service is unavailable.", "TFS_PROJECTS_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static HttpResponseMessage EnsureResponse(HttpResponseMessage response, string operation)
+    {
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            throw new TfsProjectException("TFS denied access to the " + operation + " request.", "TFS_PROJECTS_FORBIDDEN", StatusCodes.Status403Forbidden);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            throw new TfsProjectException("TFS " + operation + " endpoint was not found.", "TFS_PROJECTS_ENDPOINT_NOT_FOUND", StatusCodes.Status503ServiceUnavailable);
+        if (!response.IsSuccessStatusCode)
+        {
+            var code = operation == "WIQL" ? "TFS_WIQL_HTTP_ERROR" : operation == "work item batch" ? "TFS_WORK_ITEMS_HTTP_ERROR" : "TFS_PROJECTS_HTTP_ERROR";
+            throw new TfsProjectException("TFS returned HTTP " + (int)response.StatusCode + " for the " + operation + " request.", code, StatusCodes.Status503ServiceUnavailable);
+        }
+        return response;
+    }
+
+    private sealed class TfsListResponse<T> { [JsonPropertyName("value")] public List<T> Value { get; init; } = []; }
+    private sealed class TfsProjectDto
+    {
+        [JsonPropertyName("id")] public string? Id { get; init; }
+        [JsonPropertyName("name")] public string? Name { get; init; }
+        [JsonPropertyName("description")] public string? Description { get; init; }
+        [JsonPropertyName("state")] public string? State { get; init; }
+        [JsonPropertyName("url")] public string? Url { get; init; }
+    }
+    private sealed class TfsTeamDto { [JsonPropertyName("id")] public string? Id { get; init; } [JsonPropertyName("name")] public string? Name { get; init; } [JsonPropertyName("description")] public string? Description { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } }
+    private sealed class TfsIterationDto { [JsonPropertyName("id")] public string? Id { get; init; } [JsonPropertyName("name")] public string? Name { get; init; } [JsonPropertyName("path")] public string? Path { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } [JsonPropertyName("attributes")] public TfsIterationAttributes? Attributes { get; init; } }
+    private sealed class TfsIterationAttributes { [JsonPropertyName("timeFrame")] public string? TimeFrame { get; init; } }
+    private sealed class TfsWiqlResponse { [JsonPropertyName("workItems")] public List<TfsWorkItemReference> WorkItems { get; init; } = []; }
+    private sealed class TfsWorkItemReference { [JsonPropertyName("id")] public int Id { get; init; } }
+    private sealed class TfsWorkItemDto { [JsonPropertyName("id")] public int Id { get; init; } [JsonPropertyName("rev")] public int Revision { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } [JsonPropertyName("fields")] public Dictionary<string, JsonElement>? Fields { get; init; } }
+}
+
+public sealed class TfsProjectException(string message, string code, int statusCode) : Exception(message)
+{
+    public string Code { get; } = code;
+    public int StatusCode { get; } = statusCode;
+}

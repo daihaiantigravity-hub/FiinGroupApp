@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using FiinGroupApp.Api.Auth;
 using FiinGroupApp.Api.Database;
 using FiinGroupApp.Api.Dashboard;
+using FiinGroupApp.Api.Tfs;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
@@ -16,6 +17,7 @@ var tfsOptions = new TfsOptions
 {
     Enabled = builder.Configuration.GetValue<bool>("Tfs:Enabled"),
     BaseUrl = builder.Configuration["Tfs:BaseUrl"],
+    Collection = builder.Configuration["Tfs:Collection"] ?? "DefaultCollection",
     TimeoutSeconds = builder.Configuration.GetValue("Tfs:TimeoutSeconds", 15),
     RequireIdentityMapping = builder.Configuration.GetValue<bool>("Tfs:RequireIdentityMapping")
 };
@@ -45,6 +47,7 @@ else
     builder.Services.AddSingleton<IUserStore>(sp => new DevelopmentUserStore(builder.Configuration, sp.GetRequiredService<IPasswordHasher>(), builder.Environment.IsDevelopment()));
 builder.Services.AddHealthChecks().AddCheck("identity-store", new IdentityStoreHealthCheck(identityOptions.ConnectionString, identityOptions.Enabled));
 builder.Services.AddSingleton<ITfsAuthenticationService>(new TfsAuthenticationService(tfsOptions));
+builder.Services.AddSingleton<ITfsProjectReader>(new TfsProjectReader(tfsOptions));
 builder.Services.AddSingleton<ITargetSessionStore>(new InMemoryTargetSessionStore(sessionOptions));
 builder.Services.AddSingleton<IDashboardStatsReader>(new MySqlDashboardStatsReader(dashboardOptions));
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -69,6 +72,7 @@ app.MapGet("/api/v2/ping", () => Results.Ok(new { success = true, service = "fii
 app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth, ITargetSessionStore sessions, HttpResponse response, CancellationToken cancellationToken) =>
 {
     AuthenticatedUser? authenticated = null;
+    TfsSessionCredential? tfsCredential = null;
     var authProvider = string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase) ? "tfs" : "local";
     if (!string.Equals(request.AuthProvider, "local", StringComparison.OrdinalIgnoreCase) && !string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase))
         return Results.Json(new { success = false, message = "Unsupported authentication provider.", error = new { code = "AUTH_PROVIDER_UNSUPPORTED", message = "Unsupported authentication provider." } }, statusCode: StatusCodes.Status400BadRequest);
@@ -78,6 +82,7 @@ app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth
         try
         {
             var result = await tfs.AuthenticateAsync(request, cancellationToken);
+            tfsCredential = result.Credential;
             var resolver = app.Services.GetService<ITfsIdentityResolver>();
             var mapped = resolver is null ? null : await resolver.ResolveAsync(result.Identity, cancellationToken);
             if (mapped is not null) authenticated = mapped;
@@ -100,7 +105,7 @@ app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth
     }
 
     if (authenticated is null) return Results.Unauthorized();
-    response.Cookies.Append(sessionOptions.CookieName, sessions.Create(authenticated), new CookieOptions
+    response.Cookies.Append(sessionOptions.CookieName, sessions.Create(authenticated, tfsCredential), new CookieOptions
     {
         HttpOnly = true,
         Secure = sessionOptions.SecureCookie,
@@ -134,6 +139,91 @@ app.MapGet("/api/v2/auth/permissions", (HttpRequest request, ITargetSessionStore
     return authenticated is null
         ? Results.Unauthorized()
         : Results.Ok(new { success = true, permissions = authenticated.Permissions });
+});
+app.MapGet("/api/v2/tfs/projects", async (HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
+    var credential = sessions.GetTfsCredential(sessionId);
+    if (credential is null)
+        return Results.Json(new { success = false, error = new { code = "TFS_SESSION_CREDENTIAL_MISSING", message = "This session is not a TFS-authenticated session." } }, statusCode: StatusCodes.Status401Unauthorized);
+    try
+    {
+        var projects = await reader.GetProjectsAsync(credential, cancellationToken);
+        return Results.Ok(new { success = true, data = projects });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/tfs/projects/{projectId}", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
+    var credential = sessions.GetTfsCredential(sessionId);
+    if (credential is null)
+        return Results.Json(new { success = false, error = new { code = "TFS_SESSION_CREDENTIAL_MISSING", message = "This session is not a TFS-authenticated session." } }, statusCode: StatusCodes.Status401Unauthorized);
+    try
+    {
+        var project = await reader.GetProjectAsync(credential, projectId, request.Query["collection"], cancellationToken);
+        return project is null
+            ? Results.NotFound(new { success = false, error = new { code = "TFS_PROJECT_NOT_FOUND", message = "TFS project was not found." } })
+            : Results.Ok(new { success = true, data = project });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/tfs/projects/{projectId}/teams", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
+    var credential = sessions.GetTfsCredential(sessionId);
+    if (credential is null) return Results.Unauthorized();
+    try
+    {
+        var teams = await reader.GetTeamsAsync(credential, projectId, request.Query["collection"], cancellationToken);
+        return Results.Ok(new { success = true, data = teams });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/tfs/projects/{projectId}/iterations", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
+    var credential = sessions.GetTfsCredential(sessionId);
+    if (credential is null) return Results.Unauthorized();
+    try
+    {
+        var iterations = await reader.GetIterationsAsync(credential, projectId, request.Query["collection"], cancellationToken);
+        return Results.Ok(new { success = true, data = iterations });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/tfs/projects/{projectId}/work-items", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
+    var credential = sessions.GetTfsCredential(sessionId);
+    if (credential is null) return Results.Unauthorized();
+    var limit = int.TryParse(request.Query["limit"], out var parsedLimit) ? parsedLimit : 100;
+    try
+    {
+        var workItems = await reader.GetWorkItemsAsync(credential, projectId, request.Query["collection"], request.Query["projectName"], limit, cancellationToken);
+        return Results.Ok(new { success = true, data = workItems });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
 });
 app.MapGet("/api/v2/dashboard/stats", async (HttpRequest request, ITargetSessionStore sessions, IDashboardStatsReader reader, CancellationToken cancellationToken) =>
 {

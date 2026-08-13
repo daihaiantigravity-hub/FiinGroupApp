@@ -9,7 +9,7 @@ export default function DashboardPage() {
   const auth = useAuth();
   const [apiStatus, setApiStatus] = useState<ServiceStatus>('checking');
   const [healthStatus, setHealthStatus] = useState<ServiceStatus>('checking');
-  const [legacyStats, setLegacyStats] = useState<LegacyDashboardStats | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<LegacyDashboardStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const legacyMode = (import.meta.env.VITE_AUTH_MODE ?? 'legacy') !== 'target-dev';
 
@@ -26,9 +26,12 @@ export default function DashboardPage() {
 
   useEffect(() => { void checkPlatform(); }, [checkPlatform]);
   useEffect(() => {
-    if (!legacyMode) return;
+    setDashboardStats(null);
+    setStatsError(null);
     const readStats = legacyMode ? legacyAuthClient.dashboardStats() : targetDashboardStats();
-    readStats.then(setLegacyStats).catch((error) => setStatsError(error instanceof Error ? error.message : 'Không tải được dashboard.'));
+    readStats
+      .then(setDashboardStats)
+      .catch((error) => setStatsError(error instanceof Error ? error.message : 'Không tải được dashboard.'));
   }, [legacyMode]);
 
   const statusLabel = (status: ServiceStatus) => status === 'checking' ? 'Đang kiểm tra…' : status === 'online' ? 'Hoạt động' : 'Không khả dụng';
@@ -46,11 +49,11 @@ export default function DashboardPage() {
       <article className="platform-card"><span className="card-label">Form permissions</span><strong>{formPermissionCount}</strong><small>Snapshot từ target session</small></article>
       <article className="platform-card"><span className="card-label">Action permissions</span><strong>{actionPermissionCount}</strong><small>Snapshot từ target session</small></article>
     </div>
-    {legacyMode && legacyStats && <div className="dashboard-grid legacy-stats-grid">
-      <article className="platform-card"><span className="card-label">Nhân sự legacy</span><strong>{legacyStats.employees.total}</strong><small>+{legacyStats.employees.new_this_month} tháng này</small></article>
-      <article className="platform-card"><span className="card-label">Dự án đang chạy</span><strong>{legacyStats.projects.active}</strong><small>{legacyStats.projects.total} tổng số</small></article>
-      <article className="platform-card"><span className="card-label">Doanh thu YTD</span><strong>{legacyStats.revenue.display}</strong><small>{legacyStats.revenue.ytd_label}</small></article>
-      <article className="platform-card"><span className="card-label">Đang chờ xử lý</span><strong>{legacyStats.pending.count}</strong><small>Đọc từ Jarvis legacy</small></article>
+    {dashboardStats && <div className="dashboard-grid legacy-stats-grid">
+      <article className="platform-card"><span className="card-label">Nhân sự</span><strong>{dashboardStats.employees.total}</strong><small>+{dashboardStats.employees.new_this_month} tháng này</small></article>
+      <article className="platform-card"><span className="card-label">Dự án đang chạy</span><strong>{dashboardStats.projects.active}</strong><small>{dashboardStats.projects.total} tổng số</small></article>
+      <article className="platform-card"><span className="card-label">Doanh thu YTD</span><strong>{dashboardStats.revenue.display}</strong><small>{dashboardStats.revenue.ytd_label}</small></article>
+      <article className="platform-card"><span className="card-label">Đang chờ xử lý</span><strong>{dashboardStats.pending.count}</strong><small>{legacyMode ? 'Đọc từ Jarvis legacy' : 'Đọc từ target read model'}</small></article>
     </div>}
     <div className="platform-status-list">
       <div><span>ASP.NET Core API v2</span><strong className={apiStatus}>{statusLabel(apiStatus)}</strong></div>

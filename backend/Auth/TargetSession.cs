@@ -12,8 +12,9 @@ public sealed class TargetSessionOptions
 
 public interface ITargetSessionStore
 {
-    string Create(AuthenticatedUser authenticatedUser);
+    string Create(AuthenticatedUser authenticatedUser, TfsSessionCredential? tfsCredential = null);
     AuthenticatedUser? Get(string sessionId);
+    TfsSessionCredential? GetTfsCredential(string sessionId);
     void Remove(string sessionId);
 }
 
@@ -21,12 +22,23 @@ public sealed class InMemoryTargetSessionStore(TargetSessionOptions options) : I
 {
     private readonly ConcurrentDictionary<string, SessionEntry> sessions = new(StringComparer.Ordinal);
 
-    public string Create(AuthenticatedUser authenticatedUser)
+    public string Create(AuthenticatedUser authenticatedUser, TfsSessionCredential? tfsCredential = null)
     {
         var sessionId = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace('+', '-').Replace('/', '_').TrimEnd('=');
-        sessions[sessionId] = new SessionEntry(authenticatedUser, DateTimeOffset.UtcNow.AddHours(Math.Clamp(options.LifetimeHours, 1, 24)));
+        sessions[sessionId] = new SessionEntry(authenticatedUser, tfsCredential, DateTimeOffset.UtcNow.AddHours(Math.Clamp(options.LifetimeHours, 1, 24)));
         return sessionId;
+    }
+
+    public TfsSessionCredential? GetTfsCredential(string sessionId)
+    {
+        if (!sessions.TryGetValue(sessionId, out var entry)) return null;
+        if (entry.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            sessions.TryRemove(sessionId, out _);
+            return null;
+        }
+        return entry.TfsCredential;
     }
 
     public AuthenticatedUser? Get(string sessionId)
@@ -42,5 +54,5 @@ public sealed class InMemoryTargetSessionStore(TargetSessionOptions options) : I
 
     public void Remove(string sessionId) => sessions.TryRemove(sessionId, out _);
 
-    private sealed record SessionEntry(AuthenticatedUser User, DateTimeOffset ExpiresAt);
+    private sealed record SessionEntry(AuthenticatedUser User, TfsSessionCredential? TfsCredential, DateTimeOffset ExpiresAt);
 }
