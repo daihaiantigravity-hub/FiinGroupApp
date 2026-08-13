@@ -9,6 +9,7 @@ export type AuthUser = {
 
 export type Permission = { canAccess?: boolean; canView?: boolean; canAdd?: boolean; canEdit?: boolean; canDelete?: boolean; canImport?: boolean; canExport?: boolean; canApprove?: boolean; canPay?: boolean; canComplete?: boolean };
 export type PermissionMap = Record<string, Permission>;
+export type ActionPermissionMap = Record<string, boolean>;
 
 export type AuthStatus = 'anonymous' | 'authenticating' | 'otp_required' | 'authenticated' | 'error';
 export type OtpMethod = 'email_otp' | 'google_auth' | 'totp';
@@ -24,4 +25,5 @@ export type AuthState = {
   challenge: Extract<LoginOutcome, { kind: 'otp_required' }> | null;
   error: string | null;
   permissions: PermissionMap;
+  actionPermissions: ActionPermissionMap;
 };

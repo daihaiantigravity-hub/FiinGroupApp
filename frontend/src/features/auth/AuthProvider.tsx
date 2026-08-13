@@ -9,7 +9,7 @@ type AuthContextValue = AuthState & {
   logout: () => Promise<void>;
 };
 
-const initialState: AuthState = { status: 'anonymous', user: null, challenge: null, error: null, permissions: {} };
+const initialState: AuthState = { status: 'anonymous', user: null, challenge: null, error: null, permissions: {}, actionPermissions: {} };
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -19,7 +19,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!targetMode) return;
     let active = true;
     restoreTargetSession().then((session) => {
-      if (active && session) setState({ status: 'authenticated', user: session.user, challenge: null, error: null, permissions: session.permissions });
+      if (active && session) setState({ status: 'authenticated', user: session.user, challenge: null, error: null, permissions: session.permissions, actionPermissions: session.actionPermissions });
     }).catch(() => undefined);
     return () => { active = false; };
   }, [targetMode]);
@@ -28,13 +28,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       if (targetMode) {
         const target = await loginAgainstTarget(username, password, authProvider, domain);
-        setState({ status: 'authenticated', user: target.outcome.user, challenge: null, error: null, permissions: target.permissions });
+        setState({ status: 'authenticated', user: target.outcome.user, challenge: null, error: null, permissions: target.permissions, actionPermissions: target.actionPermissions });
         return;
       }
       const result = await legacyAuthClient.login(username, password, authProvider, domain);
       if (result.kind === 'authenticated') {
         const permissions = await legacyAuthClient.permissions();
-        setState({ status: 'authenticated', user: result.user, challenge: null, error: null, permissions });
+        setState({ status: 'authenticated', user: result.user, challenge: null, error: null, permissions, actionPermissions: {} });
       } else if (result.kind === 'otp_required') setState({ ...initialState, status: 'otp_required', user: result.user ? { login: result.user.login ?? '' } : null, challenge: result });
       else setState({ ...initialState, status: 'error', error: 'Tài khoản cần hoàn tất thiết lập 2FA.' });
     } catch (error) { setState({ ...initialState, status: 'error', error: error instanceof Error ? error.message : 'Đăng nhập thất bại.' }); }
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const result = await legacyAuthClient.verifyOtp(state.challenge.otpToken, code);
       const permissions = await legacyAuthClient.permissions();
-      setState({ status: 'authenticated', user: result.user, challenge: null, error: null, permissions });
+      setState({ status: 'authenticated', user: result.user, challenge: null, error: null, permissions, actionPermissions: {} });
     } catch (error) { setState((current) => ({ ...current, status: 'otp_required', error: error instanceof Error ? error.message : 'Mã xác thực không hợp lệ.' })); }
   };
   const logout = async () => { if (targetMode) await logoutTarget(); else await legacyAuthClient.logout(); setState(initialState); };

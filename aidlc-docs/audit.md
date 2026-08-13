@@ -140,3 +140,9 @@
 - Added target session, current-profile, permissions and logout endpoints.
 - Added provider validation and session revocation tests.
 - Explicitly kept persistent session storage, refresh rotation and 2FA behind the authentication acceptance gate.
+
+## 2026-08-13 — Permission contract comparison slice
+
+- Confirmed Jarvis TFS login intentionally returns empty form/action permissions because the TFS identity has no Jarvis database permission row.
+- Preserved separate form permissions and action permissions in the target React auth state.
+- Added target route-guard support for form access and explicit action codes; no business module is enabled by this slice.
