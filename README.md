@@ -33,3 +33,5 @@ Disposable database integration setup is documented in `docs/integration-test-ru
 Pilot users are created explicitly with `backend.IdentityProvisioner`; no credentials are seeded in source control.
 
 The technical pilot configuration and evidence requirements are documented in `docs/pilot-environment.md`.
+
+TFS domain login setup and troubleshooting are documented in `docs/tfs-login-troubleshooting.md`. The target must be restarted after changing `Tfs__*` environment variables.

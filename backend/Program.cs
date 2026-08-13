@@ -57,7 +57,7 @@ app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth
         }
         catch (TfsAuthenticationException exception)
         {
-            return Results.Json(new { success = false, message = exception.Message }, statusCode: exception.StatusCode);
+            return Results.Json(new { success = false, message = exception.Message, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
         }
     }
     var localResult = await auth.AuthenticateAsync(request, cancellationToken);

@@ -9,6 +9,17 @@ namespace FiinGroupApp.Api.Tests;
 
 public sealed class AuthServiceTests
 {
+    [Theory]
+    [InlineData("DOMAIN\\alice", "", "alice", "DOMAIN")]
+    [InlineData("DOMAIN\\alice", "OTHER", "alice", "OTHER")]
+    [InlineData("alice", "DOMAIN", "alice", "DOMAIN")]
+    public void Splits_domain_username_like_jarvis(string input, string domain, string expectedUsername, string expectedDomain)
+    {
+        var result = TfsAuthenticationService.SplitDomainUsername(input, domain);
+        Assert.Equal(expectedUsername, result.Username);
+        Assert.Equal(expectedDomain, result.Domain);
+    }
+
     [Fact]
     public async Task Rejects_empty_credentials_without_calling_store()
     {

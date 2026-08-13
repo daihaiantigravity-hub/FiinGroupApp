@@ -26,11 +26,11 @@ Configure the target API with the TFS endpoint without putting user credentials 
 
 ```powershell
 $env:Tfs__Enabled = "true"
-$env:Tfs__BaseUrl = "https://your-tfs-host/tfs/DefaultCollection"
+$env:Tfs__BaseUrl = "http://192.168.1.40:8080/tfs"
 $env:Tfs__TimeoutSeconds = "15"
 ```
 
-In the React login form choose `TFS domain account`, enter either `username` plus `DOMAIN` or `DOMAIN\username`, and use `VITE_AUTH_MODE=target-dev`. The .NET API performs the NTLM handshake against `/_apis/connectionData`; supplied credentials are used only for that request and are not stored.
+Use the same base URL that Jarvis reads from `TFS_BASE_URL`. Do not append `/_apis/connectionData`; the target API appends it. In the React login form choose `TFS domain account`, enter either `username` plus `DOMAIN` or `DOMAIN\username`, and use `VITE_AUTH_MODE=target-dev`. The .NET API performs the NTLM handshake against `/_apis/connectionData`; supplied credentials are used only for that request and are not stored. See `docs/tfs-login-troubleshooting.md` for safe error codes.
 
 ## Compatibility mode
 
