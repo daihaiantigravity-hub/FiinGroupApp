@@ -23,7 +23,7 @@
 ### CONSTRUCTION
 
 - [ ] Application Platform
-- [~] Authentication and user profile — React legacy adapter plus .NET target contracts; database store and 2FA migration pending
+- [~] Authentication and user profile — TFS target login plus in-memory pilot session/profile/permission contracts; persistent store and 2FA migration pending
 
 ## Migration decision
 

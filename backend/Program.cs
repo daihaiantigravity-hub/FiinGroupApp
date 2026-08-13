@@ -56,6 +56,8 @@ app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth
 {
     AuthenticatedUser? authenticated = null;
     var authProvider = string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase) ? "tfs" : "local";
+    if (!string.Equals(request.AuthProvider, "local", StringComparison.OrdinalIgnoreCase) && !string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase))
+        return Results.Json(new { success = false, message = "Unsupported authentication provider.", error = new { code = "AUTH_PROVIDER_UNSUPPORTED", message = "Unsupported authentication provider." } }, statusCode: StatusCodes.Status400BadRequest);
     if (string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase))
     {
         var tfs = app.Services.GetRequiredService<ITfsAuthenticationService>();
@@ -93,6 +95,22 @@ app.MapGet("/api/v2/auth/session", (HttpRequest request, ITargetSessionStore ses
     return authenticated is null
         ? Results.Unauthorized()
         : Results.Ok(new { success = true, user = authenticated.User, permissions = authenticated.Permissions });
+});
+app.MapGet("/api/v2/auth/me", (HttpRequest request, ITargetSessionStore sessions) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    return authenticated is null
+        ? Results.Unauthorized()
+        : Results.Ok(new { success = true, user = authenticated.User });
+});
+app.MapGet("/api/v2/auth/permissions", (HttpRequest request, ITargetSessionStore sessions) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    return authenticated is null
+        ? Results.Unauthorized()
+        : Results.Ok(new { success = true, permissions = authenticated.Permissions });
 });
 app.MapPost("/api/v2/auth/logout", (HttpRequest request, HttpResponse response, ITargetSessionStore sessions) =>
 {

@@ -133,3 +133,10 @@
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
 - Registered a development store that rejects all credentials and contains no seeded account.
 - Kept the React legacy adapter active for compatibility comparison.
+
+## 2026-08-13 — TFS pilot session and auth contract slice
+
+- Added an in-memory HttpOnly session for the technical pilot after successful TFS validation.
+- Added target session, current-profile, permissions and logout endpoints.
+- Added provider validation and session revocation tests.
+- Explicitly kept persistent session storage, refresh rotation and 2FA behind the authentication acceptance gate.
