@@ -110,6 +110,12 @@
 - Added a health check that distinguishes disabled compatibility mode from an unreachable enabled identity database.
 - The check never runs against Jarvis because the identity connection is separately configured and the new database name remains enforced by tooling.
 
+## 2026-08-13 — Refresh session persistence
+
+- Added opaque refresh-token generation, SHA-256 hashing and MySQL session create/rotate/revoke operations.
+- Added unit coverage for token randomness and one-way hashing.
+- Kept session store unregistered until access-token, cookie and 2FA acceptance gates are complete.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.

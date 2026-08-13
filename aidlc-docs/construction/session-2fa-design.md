@@ -4,6 +4,7 @@
 
 - Short-lived access credential for API calls.
 - Long-lived refresh session stored in `app_sessions` as a hash only.
+- Refresh tokens are opaque, generated with a cryptographic random source, and rotated atomically on use.
 - Refresh rotation and revocation are server-side operations.
 - Browser delivery should use HttpOnly, Secure, SameSite cookies where deployment topology permits.
 - Logout revokes the server session and clears cookies; it is not merely client-side state deletion.
@@ -25,3 +26,7 @@ These contracts are design boundaries only. A production implementation requires
 3. Rate limiting and concurrency-safe attempt updates.
 4. Contract and security tests against the legacy fixtures.
 5. Browser cookie/CORS review for the pilot deployment.
+
+## Implemented persistence slice
+
+`MySqlSessionStore` now supports creation, atomic refresh rotation, active-session checks and revocation. It is not registered in the API yet; access-token issuance, cookie policy and 2FA completion remain acceptance gates.

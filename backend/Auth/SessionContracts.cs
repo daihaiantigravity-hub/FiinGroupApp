@@ -1,11 +1,11 @@
 namespace FiinGroupApp.Api.Auth;
 
-public sealed record AuthSession(Guid SessionId, string AccessToken, DateTimeOffset AccessTokenExpiresAt, DateTimeOffset RefreshTokenExpiresAt);
-public sealed record LoginResult(AuthenticatedUser Authentication, AuthSession Session);
+public sealed record RefreshSession(Guid SessionId, Guid UserId, string RefreshToken, DateTimeOffset ExpiresAt);
 
 public interface ISessionStore
 {
-    Task<AuthSession> CreateAsync(UserProfile user, string? ipAddress, string? userAgent, CancellationToken cancellationToken);
+    Task<RefreshSession> CreateAsync(UserProfile user, string? ipAddress, string? userAgent, CancellationToken cancellationToken);
+    Task<RefreshSession?> RotateAsync(string refreshToken, string? ipAddress, string? userAgent, CancellationToken cancellationToken);
     Task<bool> IsActiveAsync(Guid sessionId, CancellationToken cancellationToken);
     Task RevokeAsync(Guid sessionId, CancellationToken cancellationToken);
 }
