@@ -32,6 +32,8 @@ $env:Tfs__TimeoutSeconds = "15"
 
 Use the same base URL that Jarvis reads from `TFS_BASE_URL`. Do not append `/_apis/connectionData`; the target API appends it. In the React login form choose `TFS domain account`, enter either `username` plus `DOMAIN` or `DOMAIN\username`, and use `VITE_AUTH_MODE=target-dev`. The .NET API performs the NTLM handshake against `/_apis/connectionData`; supplied credentials are used only for that request and are not stored. See `docs/tfs-login-troubleshooting.md` for safe error codes.
 
+After successful TFS validation, the pilot API issues an HttpOnly session cookie. The session is in-memory and is intended for internal technical testing only; it is cleared when the API restarts. `/api/v2/auth/session` restores the login after a browser refresh and `/api/v2/auth/logout` clears it.
+
 ## Compatibility mode
 
 The React app currently uses the legacy auth adapter and Vite proxies `/api` to Jarvis. This remains the default pilot mode until the target session/2FA implementation passes the acceptance checklist.

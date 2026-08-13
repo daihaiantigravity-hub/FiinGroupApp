@@ -19,3 +19,15 @@ export async function loginAgainstTarget(username: string, password: string, aut
   const permissions = payload.permissions?.forms ?? {};
   return { outcome: { kind: 'authenticated', token: '', user: mapUser(payload.user) }, permissions };
 }
+
+export async function restoreTargetSession(): Promise<{ user: AuthUser; permissions: PermissionMap } | null> {
+  const response = await fetch('/api/v2/auth/session', { credentials: 'include' });
+  if (response.status === 401) return null;
+  const payload = await response.json().catch(() => ({})) as TargetResponse;
+  if (!response.ok) throw new Error(String(payload.message ?? `Target session failed: ${response.status}`));
+  return { user: mapUser(payload.user), permissions: payload.permissions?.forms ?? {} };
+}
+
+export async function logoutTarget(): Promise<void> {
+  await fetch('/api/v2/auth/logout', { method: 'POST', credentials: 'include' });
+}

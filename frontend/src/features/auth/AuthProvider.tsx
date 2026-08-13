@@ -1,7 +1,7 @@
-import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { legacyAuthClient } from './legacyAuthClient';
 import type { AuthState } from './authTypes';
-import { loginAgainstTarget } from './targetAuthClient';
+import { loginAgainstTarget, logoutTarget, restoreTargetSession } from './targetAuthClient';
 
 type AuthContextValue = AuthState & {
   login: (username: string, password: string, authProvider?: string, domain?: string) => Promise<void>;
@@ -14,10 +14,19 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AuthState>(initialState);
+  const targetMode = (import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev';
+  useEffect(() => {
+    if (!targetMode) return;
+    let active = true;
+    restoreTargetSession().then((session) => {
+      if (active && session) setState({ status: 'authenticated', user: session.user, challenge: null, error: null, permissions: session.permissions });
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [targetMode]);
   const login = async (username: string, password: string, authProvider = 'local', domain = '') => {
     setState({ ...initialState, status: 'authenticating' });
     try {
-      if ((import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev') {
+      if (targetMode) {
         const target = await loginAgainstTarget(username, password, authProvider, domain);
         setState({ status: 'authenticated', user: target.outcome.user, challenge: null, error: null, permissions: target.permissions });
         return;
@@ -31,7 +40,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } catch (error) { setState({ ...initialState, status: 'error', error: error instanceof Error ? error.message : 'Đăng nhập thất bại.' }); }
   };
   const verifyOtp = async (code: string) => {
-    if ((import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev') { setState((current) => ({ ...current, error: 'Target-dev login chưa hỗ trợ OTP; hãy dùng legacy mode để test OTP/TOTP.' })); return; }
+    if (targetMode) { setState((current) => ({ ...current, error: 'Target-dev login chưa hỗ trợ OTP; hãy dùng legacy mode để test OTP/TOTP.' })); return; }
     if (!state.challenge) return;
     try {
       const result = await legacyAuthClient.verifyOtp(state.challenge.otpToken, code);
@@ -39,7 +48,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setState({ status: 'authenticated', user: result.user, challenge: null, error: null, permissions });
     } catch (error) { setState((current) => ({ ...current, status: 'otp_required', error: error instanceof Error ? error.message : 'Mã xác thực không hợp lệ.' })); }
   };
-  const logout = async () => { await legacyAuthClient.logout(); setState(initialState); };
+  const logout = async () => { if (targetMode) await logoutTarget(); else await legacyAuthClient.logout(); setState(initialState); };
   const value = useMemo(() => ({ ...state, login, verifyOtp, logout }), [state]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

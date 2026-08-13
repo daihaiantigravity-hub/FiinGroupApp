@@ -17,6 +17,12 @@ var tfsOptions = new TfsOptions
     BaseUrl = builder.Configuration["Tfs:BaseUrl"],
     TimeoutSeconds = builder.Configuration.GetValue("Tfs:TimeoutSeconds", 15)
 };
+var sessionOptions = new TargetSessionOptions
+{
+    CookieName = builder.Configuration["Auth:SessionCookieName"] ?? "fiingroupapp_session",
+    LifetimeHours = builder.Configuration.GetValue("Auth:SessionLifetimeHours", 8),
+    SecureCookie = builder.Configuration.GetValue("Auth:SecureCookie", false)
+};
 if (identityOptions.Enabled && string.IsNullOrWhiteSpace(identityOptions.ConnectionString))
     throw new InvalidOperationException("IdentityStore is enabled but ConnectionStrings:Identity is not configured.");
 builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
@@ -26,6 +32,7 @@ else
     builder.Services.AddSingleton<IUserStore>(sp => new DevelopmentUserStore(builder.Configuration, sp.GetRequiredService<IPasswordHasher>(), builder.Environment.IsDevelopment()));
 builder.Services.AddHealthChecks().AddCheck("identity-store", new IdentityStoreHealthCheck(identityOptions.ConnectionString, identityOptions.Enabled));
 builder.Services.AddSingleton<ITfsAuthenticationService>(new TfsAuthenticationService(tfsOptions));
+builder.Services.AddSingleton<ITargetSessionStore>(new InMemoryTargetSessionStore(sessionOptions));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"])
@@ -45,25 +52,54 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.MapHealthChecks("/health");
 app.MapGet("/api/v2/ping", () => Results.Ok(new { success = true, service = "fiingroup-app-api", version = "v2" }));
-app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth, CancellationToken cancellationToken) =>
+app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth, ITargetSessionStore sessions, HttpResponse response, CancellationToken cancellationToken) =>
 {
+    AuthenticatedUser? authenticated = null;
+    var authProvider = string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase) ? "tfs" : "local";
     if (string.Equals(request.AuthProvider, "tfs", StringComparison.OrdinalIgnoreCase))
     {
         var tfs = app.Services.GetRequiredService<ITfsAuthenticationService>();
         try
         {
             var result = await tfs.AuthenticateAsync(request, cancellationToken);
-            return Results.Ok(new { success = true, user = result.User, permissions = result.Permissions, authProvider = "tfs" });
+            authenticated = new AuthenticatedUser(result.User, result.Permissions);
         }
         catch (TfsAuthenticationException exception)
         {
             return Results.Json(new { success = false, message = exception.Message, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
         }
     }
-    var localResult = await auth.AuthenticateAsync(request, cancellationToken);
-    return localResult is null
+    else
+    {
+        authenticated = await auth.AuthenticateAsync(request, cancellationToken);
+    }
+
+    if (authenticated is null) return Results.Unauthorized();
+    response.Cookies.Append(sessionOptions.CookieName, sessions.Create(authenticated), new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = sessionOptions.SecureCookie,
+        SameSite = SameSiteMode.Lax,
+        IsEssential = true,
+        MaxAge = TimeSpan.FromHours(Math.Clamp(sessionOptions.LifetimeHours, 1, 24)),
+        Path = "/"
+    });
+    return Results.Ok(new { success = true, user = authenticated.User, permissions = authenticated.Permissions, authProvider });
+});
+app.MapGet("/api/v2/auth/session", (HttpRequest request, ITargetSessionStore sessions) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    return authenticated is null
         ? Results.Unauthorized()
-        : Results.Ok(new { success = true, user = localResult.User, permissions = localResult.Permissions });
+        : Results.Ok(new { success = true, user = authenticated.User, permissions = authenticated.Permissions });
+});
+app.MapPost("/api/v2/auth/logout", (HttpRequest request, HttpResponse response, ITargetSessionStore sessions) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (!string.IsNullOrWhiteSpace(sessionId)) sessions.Remove(sessionId);
+    response.Cookies.Delete(sessionOptions.CookieName, new CookieOptions { Path = "/", Secure = sessionOptions.SecureCookie, SameSite = SameSiteMode.Lax });
+    return Results.Ok(new { success = true });
 });
 app.Run();
 
