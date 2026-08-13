@@ -215,10 +215,29 @@ app.MapGet("/api/v2/tfs/projects/{projectId}/work-items", async (string projectI
     var credential = sessions.GetTfsCredential(sessionId);
     if (credential is null) return Results.Unauthorized();
     var limit = int.TryParse(request.Query["limit"], out var parsedLimit) ? parsedLimit : 100;
+    var offset = int.TryParse(request.Query["offset"], out var parsedOffset) ? parsedOffset : 0;
     try
     {
-        var workItems = await reader.GetWorkItemsAsync(credential, projectId, request.Query["collection"], request.Query["projectName"], limit, cancellationToken);
+        var workItems = await reader.GetWorkItemsAsync(credential, projectId, request.Query["collection"], request.Query["projectName"], limit, offset, cancellationToken);
         return Results.Ok(new { success = true, data = workItems });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async (string projectId, int workItemId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
+    var credential = sessions.GetTfsCredential(sessionId);
+    if (credential is null) return Results.Unauthorized();
+    try
+    {
+        var workItem = await reader.GetWorkItemAsync(credential, projectId, workItemId, request.Query["collection"], cancellationToken);
+        return workItem is null
+            ? Results.NotFound(new { success = false, error = new { code = "TFS_WORK_ITEM_NOT_FOUND", message = "TFS work item was not found." } })
+            : Results.Ok(new { success = true, data = workItem });
     }
     catch (TfsProjectException exception)
     {

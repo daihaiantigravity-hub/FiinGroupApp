@@ -13,14 +13,21 @@ The project is in AI-DLC Inception. The legacy Jarvis application remains the so
 - `aidlc-docs/` — AI-DLC state and project artefacts.
 - `docs/` — migration and legacy-system documentation.
 
-## Planned local commands
+## Local commands
 
 ```text
 cd frontend && npm install && npm run dev
 cd backend && dotnet run
 ```
 
-The backend currently requires a .NET 8 SDK. The installed SDK must be checked before scaffolding is finalized.
+Frontend requires Node.js 20.19 or newer because the current Vite toolchain does not support Node 14/18.
+Backend requires the .NET 8 runtime/SDK. If the API is already running, stop it before rebuilding so
+`backend/bin/Debug/net8.0/FiinGroupApp.Api.exe` is not locked.
+
+For the target TFS pilot, start the frontend with `VITE_AUTH_MODE=target-dev`, sign in, then open
+`/projectmanagement`. The project screen follows the Jarvis project-management layout with read-only
+sheets for overview, teams, iterations and work items. `/project-tasks` opens the WBS/progress sheet
+directly. PMBOK write screens remain disabled until their contracts and data sources are approved.
 
 ## Migration rule
 

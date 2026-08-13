@@ -11,7 +11,8 @@ namespace FiinGroupApp.Api.Tfs;
 public sealed record TfsProjectSummary(string Collection, string Id, string Name, string? Description, string? State, string? Url);
 public sealed record TfsTeamSummary(string Id, string Name, string? Description, string? Url);
 public sealed record TfsIterationSummary(string Id, string Name, string? Path, string? TimeFrame, string? Url);
-public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? Url);
+public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? StartDate, string? FinishDate, string? TargetDate, string? ClosedDate, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url);
+public sealed record TfsWorkItemDetail(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? Description, string? CreatedDate, string? ChangedDate, string? StartDate, string? FinishDate, string? TargetDate, string? Priority, string? Tags, string? History, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url);
 
 public interface ITfsProjectReader
 {
@@ -19,7 +20,8 @@ public interface ITfsProjectReader
     Task<TfsProjectSummary?> GetProjectAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
     Task<IReadOnlyList<TfsTeamSummary>> GetTeamsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
     Task<IReadOnlyList<TfsIterationSummary>> GetIterationsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
-    Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collection, string? projectName, int limit, CancellationToken cancellationToken);
+    Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collection, string? projectName, int limit, int offset, CancellationToken cancellationToken);
+    Task<TfsWorkItemDetail?> GetWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collection, CancellationToken cancellationToken);
 }
 
 public sealed record TfsWorkItemQueryResult(string Collection, string ProjectId, int TotalAvailable, IReadOnlyList<TfsWorkItemSummary> Items);
@@ -82,7 +84,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         return payload.Value.Select(iteration => new TfsIterationSummary(iteration.Id ?? string.Empty, iteration.Name ?? string.Empty, iteration.Path, iteration.Attributes?.TimeFrame, iteration.Url)).ToArray();
     }
 
-    public async Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, string? projectName, int limit, CancellationToken cancellationToken)
+    public async Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, string? projectName, int limit, int offset, CancellationToken cancellationToken)
     {
         var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
         var project = ValidateProjectId(projectId);
@@ -92,7 +94,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         var wiql = "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = " + projectClause + " ORDER BY [System.Id] ASC";
         var queryResponse = await SendPostAsync(client, collection + "/" + Uri.EscapeDataString(project) + "/_apis/wit/wiql?api-version=1.0", new { query = wiql }, cancellationToken, "WIQL");
         var query = await queryResponse.Content.ReadFromJsonAsync<TfsWiqlResponse>(cancellationToken: cancellationToken) ?? new TfsWiqlResponse();
-        var ids = query.WorkItems.Select(item => item.Id).Where(id => id > 0).Take(requestedLimit).ToArray();
+        var ids = query.WorkItems.Select(item => item.Id).Where(id => id > 0).Skip(Math.Max(0, offset)).Take(requestedLimit).ToArray();
         var items = new List<TfsWorkItemSummary>();
         for (var index = 0; index < ids.Length; index += 100)
         {
@@ -102,6 +104,17 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
             items.AddRange(payload.Value.Select(MapWorkItem));
         }
         return new TfsWorkItemQueryResult(collection, project, query.WorkItems.Count, items);
+    }
+
+    public async Task<TfsWorkItemDetail?> GetWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collectionOverride, CancellationToken cancellationToken)
+    {
+        if (workItemId <= 0) throw new TfsProjectException("Work item id is invalid.", "TFS_WORK_ITEM_ID_INVALID", StatusCodes.Status400BadRequest);
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        using var client = CreateClient(credential);
+        var response = await SendAsync(client, collection + "/_apis/wit/workitems/" + workItemId + "?%24expand=relations&api-version=1.0", cancellationToken, "work item detail");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        var item = await response.Content.ReadFromJsonAsync<TfsWorkItemDto>(cancellationToken: cancellationToken);
+        return item is null ? null : MapWorkItemDetail(item);
     }
 
     private async Task<IReadOnlyList<string>> GetCollectionsAsync(HttpClient client, CancellationToken cancellationToken)
@@ -182,13 +195,89 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
 
     private static TfsProjectSummary Map(string collection, TfsProjectDto project) => new(collection, project.Id ?? string.Empty, project.Name ?? string.Empty, project.Description, project.State, project.Url);
     private static TfsWorkItemSummary MapWorkItem(TfsWorkItemDto item)
-        => new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), item.Url);
+    {
+        var statusCode = MapStatus(Field(item.Fields, "System.State"));
+        var startDate = MappedStartDate(item.Fields);
+        var endDate = MappedEndDate(item.Fields);
+        return new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), Field(item.Fields, "System.IterationPath"), IntegerField(item.Fields, "System.Parent"), startDate, endDate, Field(item.Fields, "Microsoft.VSTS.Scheduling.TargetDate"), Field(item.Fields, "Microsoft.VSTS.Common.ClosedDate"), statusCode, CalculateProgress(item.Fields, statusCode), CalculatePlan(startDate, endDate, CalculateProgress(item.Fields, statusCode)), MapPriority(IntegerField(item.Fields, "Microsoft.VSTS.Common.Priority")), "TFS-" + item.Id, Field(item.Fields, "System.Tags") ?? Field(item.Fields, "System.AreaPath"), CreatedByLogin(Field(item.Fields, "System.CreatedBy")), item.Url);
+    }
+
+    private static TfsWorkItemDetail MapWorkItemDetail(TfsWorkItemDto item)
+    {
+        var statusCode = MapStatus(Field(item.Fields, "System.State"));
+        var startDate = MappedStartDate(item.Fields);
+        var endDate = MappedEndDate(item.Fields);
+        return new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), Field(item.Fields, "System.IterationPath"), IntegerField(item.Fields, "System.Parent"), Field(item.Fields, "System.Description"), Field(item.Fields, "System.CreatedDate"), Field(item.Fields, "System.ChangedDate"), startDate, Field(item.Fields, "Microsoft.VSTS.Scheduling.FinishDate"), Field(item.Fields, "Microsoft.VSTS.Scheduling.TargetDate"), Field(item.Fields, "Microsoft.VSTS.Common.Priority"), Field(item.Fields, "System.Tags"), Field(item.Fields, "System.History"), statusCode, CalculateProgress(item.Fields, statusCode), CalculatePlan(startDate, endDate, CalculateProgress(item.Fields, statusCode)), MapPriority(IntegerField(item.Fields, "Microsoft.VSTS.Common.Priority")), "TFS-" + item.Id, Field(item.Fields, "System.Tags") ?? Field(item.Fields, "System.AreaPath"), CreatedByLogin(Field(item.Fields, "System.CreatedBy")), item.Url);
+    }
+
+    private static int MapStatus(string? state)
+    {
+        var value = (state ?? string.Empty).Trim().ToLowerInvariant();
+        if (value.Contains("done") || value.Contains("closed") || value.Contains("completed") || value.Contains("complete") || value.Contains("accepted") || value.Contains("inactive")) return 3;
+        if (value.Contains("removed") || value.Contains("deleted") || value.Contains("cancel") || value.Contains("cut")) return 9;
+        if (value.Contains("blocked") || value.Contains("paused") || value.Contains("resolved") || value.Contains("on hold")) return 2;
+        if (value.Contains("active") || value.Contains("doing") || value.Contains("in progress") || value.Contains("committed") || value.Contains("commited") || value.Contains("development") || value.Contains("testing") || value.Contains("review") || value.Contains("deployment") || value.Contains("deployed") || value.Contains("open") || value.Contains("ready")) return 1;
+        return 0;
+    }
+
+    private static decimal CalculateProgress(Dictionary<string, JsonElement>? fields, int status)
+    {
+        var completed = DecimalField(fields, "Microsoft.VSTS.Scheduling.CompletedWork");
+        var remaining = DecimalField(fields, "Microsoft.VSTS.Scheduling.RemainingWork");
+        if (completed is >= 0 && remaining is >= 0 && completed + remaining > 0)
+            return Math.Clamp(decimal.Round(completed.Value * 100 / (completed.Value + remaining.Value), 2), 0, 100);
+        return status == 3 ? 100 : status is 1 or 2 ? 50 : 0;
+    }
+
+    private static decimal CalculatePlan(string? startDate, string? endDate, decimal progress)
+    {
+        if (!DateTimeOffset.TryParse(startDate, out var start) || !DateTimeOffset.TryParse(endDate, out var end)) return progress;
+        var now = DateTimeOffset.UtcNow;
+        var startOfDay = new DateTimeOffset(start.UtcDateTime.Date, TimeSpan.Zero);
+        var endOfDay = new DateTimeOffset(end.UtcDateTime.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero);
+        if (now <= startOfDay) return 0;
+        if (now >= endOfDay) return 100;
+        return Math.Clamp(decimal.Round((decimal)((now - startOfDay).TotalMilliseconds / (endOfDay - startOfDay).TotalMilliseconds * 100), 2), 0, 100);
+    }
+
+    private static int MapPriority(int? priority) => priority switch { 1 => 4, 2 => 3, 3 => 2, >= 4 => 1, _ => 2 };
+
+    private static string? CreatedByLogin(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "tfs-sync";
+        var login = value.Trim();
+        var slash = login.LastIndexOf('\\');
+        return (slash >= 0 ? login[(slash + 1)..] : login).ToLowerInvariant();
+    }
+
+    private static string? MappedStartDate(Dictionary<string, JsonElement>? fields)
+        => Field(fields, "Microsoft.VSTS.Scheduling.StartDate") ?? Field(fields, "System.CreatedDate");
+
+    private static string? MappedEndDate(Dictionary<string, JsonElement>? fields)
+        => Field(fields, "Microsoft.VSTS.Scheduling.FinishDate")
+            ?? Field(fields, "Microsoft.VSTS.Scheduling.TargetDate")
+            ?? Field(fields, "Microsoft.VSTS.Common.ClosedDate")
+            ?? Field(fields, "System.ChangedDate")
+            ?? MappedStartDate(fields);
 
     private static string? Field(Dictionary<string, JsonElement>? fields, string key)
     {
         if (fields is null || !fields.TryGetValue(key, out var value)) return null;
         if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty("displayName", out var displayName)) return displayName.GetString();
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+    }
+
+    private static int? IntegerField(Dictionary<string, JsonElement>? fields, string key)
+    {
+        if (fields is null || !fields.TryGetValue(key, out var value)) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)) return number;
+        return int.TryParse(value.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private static decimal? DecimalField(Dictionary<string, JsonElement>? fields, string key)
+    {
+        if (fields is null || !fields.TryGetValue(key, out var value)) return null;
+        return decimal.TryParse(value.ToString(), out var parsed) ? parsed : null;
     }
 
     private async Task<HttpResponseMessage> SendPostAsync(HttpClient client, string relativeUrl, object body, CancellationToken cancellationToken, string operation)
