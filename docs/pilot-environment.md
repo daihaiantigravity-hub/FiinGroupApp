@@ -32,3 +32,5 @@ The React app currently uses the legacy auth adapter and Vite proxies `/api` to 
 - Auth contract comparison results.
 - Permission/profile comparison results.
 - Rollback test to legacy adapter.
+
+The `/health` endpoint includes the identity-store check. In compatibility mode it reports the store as intentionally disabled; when enabled it verifies that the dedicated database and `app_users` table are reachable.

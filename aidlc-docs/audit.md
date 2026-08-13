@@ -105,6 +105,11 @@
 - Documented environment variables and evidence required before enabling the new identity store.
 - Kept compatibility mode as the default.
 
+## 2026-08-13 — Identity health check
+
+- Added a health check that distinguishes disabled compatibility mode from an unreachable enabled identity database.
+- The check never runs against Jarvis because the identity connection is separately configured and the new database name remains enforced by tooling.
+
 ## 2026-08-12 — .NET authentication target boundary
 
 - Added .NET authentication contracts, service abstraction and `/api/v2/auth/login` endpoint.
