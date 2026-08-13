@@ -43,10 +43,14 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
 - Mapping WBS bám theo `server/services/tfs-jarvis-mapper.js`: status dùng các mã
   `0/1/2/3`, progress dùng `CompletedWork/(CompletedWork+RemainingWork)` và
   fallback `100/50/0` theo status.
+- Grid `project-tasks` giữ thứ tự cột của Jarvis: STT, mã, tên công việc,
+  sản phẩm, người thực hiện, ngày, Actual, Plan, trạng thái, ưu tiên,
+  người tạo và thao tác xem. Các thao tác ghi của Jarvis không được bật.
 - Gantt dùng ngày theo thứ tự `StartDate` và
   `FinishDate → TargetDate → ClosedDate`; khi thiếu thì fallback từ
   `CreatedDate`/`ChangedDate` giống mapper Jarvis. Vùng hiển thị có padding
-  `-7/+14 ngày` như Gantt của Jarvis.
+  `-7/+14 ngày` như Gantt của Jarvis; có header tháng/ngày, weekend,
+  today line, zoom và progress fill read-only.
 - Tab `Tổng hợp` và chế độ `Resource` của `project-tasks` vẫn chưa bật
   vì phụ thuộc các API/DB Jarvis chưa có trong repository mới.
 
@@ -73,6 +77,15 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
 11. Xác nhận các sheet Charter, Stakeholder, Resource & RACI, Cost, Risk,
    Quality, Communication và Change Log hiển thị nhưng không thể mở.
 12. Mở `/project-tasks`, chọn project và xác nhận màn hình bắt đầu ở sheet WBS.
+13. Trong `/project-tasks`, xác nhận bảng có đủ 13 cột theo thứ tự của Jarvis:
+   STT, Mã, Tên công việc, Sản phẩm, Người thực hiện, Bắt đầu, Kết thúc,
+   Tiến độ, Plan, Trạng thái, Ưu tiên, Người tạo và Thao tác.
+14. Lọc lần lượt theo trạng thái, người thực hiện và độ ưu tiên; xác nhận chỉ
+   projection TFS trên bảng thay đổi, không phát sinh request ghi dữ liệu.
+15. Xác nhận các card Tổng Task, Hoàn thành, Đang thực hiện, Quá hạn và Tiến độ
+   TB khớp với các work item đã tải.
+16. Trong Gantt, xác nhận header tháng/ngày, ngày cuối tuần, đường ngày hiện tại,
+   nút Today, zoom và phần progress fill hiển thị theo dữ liệu TFS.
 
 ## Definition of Done của slice UI
 

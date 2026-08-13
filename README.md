@@ -29,6 +29,10 @@ For the target TFS pilot, start the frontend with `VITE_AUTH_MODE=target-dev`, s
 sheets for overview, teams, iterations and work items. `/project-tasks` opens the WBS/progress sheet
 directly. PMBOK write screens remain disabled until their contracts and data sources are approved.
 
+`/wiki` and `/announcements` follow the Jarvis content-management UI. In legacy mode they read from
+the existing Jarvis list endpoints; in target TFS mode they show the explicit not-yet-approved API
+boundary and keep create/edit/delete disabled.
+
 ## Migration rule
 
 `D:\DEV\FiinGroup.Jarvis` is the trusted legacy reference for behavior and code comparison. FiinGroupApp is built incrementally; the new database/user store is the target ownership model, while legacy adapters are used only for compatibility validation during migration.

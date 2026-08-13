@@ -45,4 +45,21 @@ describe('legacyAuthClient contract', () => {
     await client.login('alice', 'secret');
     await expect(client.dashboardStats()).rejects.toThrow('No token provided');
   });
+
+  it('loads filtered Wiki entries through the legacy read contract', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ token: 'jwt-wiki', user: { login: 'alice' } })).mockResolvedValueOnce(response({ data: [{ id: 11, category: 'technical', title: 'TFS login', status: 1 }] }));
+    const client = createLegacyAuthClient({ fetchImpl });
+    await client.login('alice', 'secret');
+    await expect(client.wikiList({ category: 'technical', level: 'High', search: 'TFS' })).resolves.toEqual([{ id: 11, category: 'technical', title: 'TFS login', status: 1 }]);
+    expect(String(fetchImpl.mock.calls[1][0])).toContain('/mt_wikis?category=technical&level=High&search=TFS');
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).get('Authorization')).toBe('Bearer jwt-wiki');
+  });
+
+  it('loads filtered announcements and preserves empty list semantics', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ token: 'jwt-ann', user: { login: 'alice' } })).mockResolvedValueOnce(response({ data: [] }));
+    const client = createLegacyAuthClient({ fetchImpl });
+    await client.login('alice', 'secret');
+    await expect(client.announcementList({ category: 'document', priority: '1', search: 'guide' })).resolves.toEqual([]);
+    expect(String(fetchImpl.mock.calls[1][0])).toContain('/mt_announcements?category=document&priority=1&search=guide');
+  });
 });

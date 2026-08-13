@@ -62,7 +62,14 @@ function formatTfsDate(value: Date) {
   return value.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
+function formatTaskDate(value: string | null) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 type TfsPageKind = 'browser' | 'management' | 'tasks';
+const projectManagementStorageKey = 'projectmanagement.lastProject';
 
 export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 'browser' }: { initialSheet?: ProjectSheet; pageKind?: TfsPageKind }) {
   const targetMode = (import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev';
@@ -86,7 +93,9 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   const [wbsState, setWbsState] = useState('all');
   const [wbsIteration, setWbsIteration] = useState('all');
   const [wbsPriority, setWbsPriority] = useState('all');
+  const [wbsAssignee, setWbsAssignee] = useState('all');
   const [progressView, setProgressView] = useState<string>('list');
+  const [ganttCellWidth, setGanttCellWidth] = useState(30);
 
   const collections = useMemo(() => {
     const grouped = new Map<string, TfsProject[]>();
@@ -113,7 +122,25 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     else setLoading(false);
   }, [targetMode]);
 
+  useEffect(() => {
+    if (!targetMode || pageKind !== 'management' || selected || projects.length === 0) return;
+    try {
+      const savedProjectKey = window.localStorage.getItem(projectManagementStorageKey);
+      const savedProject = projects.find(project => project.collection + '/' + project.id === savedProjectKey);
+      if (savedProject) void selectProject(savedProject);
+    } catch {
+      // Project selection persistence is optional and must not block TFS loading.
+    }
+  }, [pageKind, projects, selected, targetMode]);
+
   async function selectProject(project: TfsProject) {
+    if (pageKind === 'management') {
+      try {
+        window.localStorage.setItem(projectManagementStorageKey, project.collection + '/' + project.id);
+      } catch {
+        // Project selection persistence is optional.
+      }
+    }
     setSelected(project);
     setActiveSheet(initialSheet);
     setDetailLoading(true);
@@ -129,17 +156,31 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     setWbsState('all');
     setWbsIteration('all');
     setWbsPriority('all');
+    setWbsAssignee('all');
     setProgressView('list');
+    setGanttCellWidth(30);
     try {
       const projectDetail = await getTfsProject(project);
       setSelected(projectDetail);
-      if (progressMode) {
+      if (progressMode || pageKind === 'management') {
         setDataLoading('work-items');
-        const result = await getTfsWorkItems(projectDetail, 100, 0);
-        setWorkItems(result.items);
-        setWorkItemTotal(result.totalAvailable);
-        setWorkItemOffset(result.items.length);
-        setLoadedSheets(previous => new Set(previous).add('work-items'));
+        if (pageKind === 'management') {
+          const [teamResult, workItemResult] = await Promise.all([
+            getTfsTeams(projectDetail),
+            getTfsWorkItems(projectDetail, 100, 0),
+          ]);
+          setTeams(teamResult);
+          setWorkItems(workItemResult.items);
+          setWorkItemTotal(workItemResult.totalAvailable);
+          setWorkItemOffset(workItemResult.items.length);
+          setLoadedSheets(previous => new Set(previous).add('teams').add('work-items'));
+        } else {
+          const result = await getTfsWorkItems(projectDetail, 100, 0);
+          setWorkItems(result.items);
+          setWorkItemTotal(result.totalAvailable);
+          setWorkItemOffset(result.items.length);
+          setLoadedSheets(previous => new Set(previous).add('work-items'));
+        }
         setDataLoading(null);
       }
     } catch (reason) {
@@ -207,6 +248,27 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     return <button type="button" className="project-load-more" onClick={() => void loadMoreWorkItems()} disabled={dataLoading !== null}>{dataLoading === 'work-items' ? 'Đang tải...' : `Tải thêm (${workItemTotal - workItemOffset})`}</button>;
   }
 
+  function renderSourceGantt() {
+    if (workItems.length === 0) return <EmptyState text="Chưa có task để dựng Gantt." />;
+    if (!ganttRange || ganttDays.length === 0) return <EmptyState text="TFS chưa trả về ngày bắt đầu/kết thúc cho các task đã tải." />;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const startMs = ganttDays[0].getTime();
+    const totalWidth = ganttDays.length * ganttCellWidth;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayOffset = (today.getTime() - startMs) / dayMs;
+    const statusLabels = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
+    return <div className="source-gantt-container"><div className="gantt-controls source-gantt-controls"><button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setGanttCellWidth(value => Math.max(15, value - 10))} title="Thu nhỏ">−</button><span className="zoom-level">{ganttCellWidth <= 20 ? 'Ngày' : ganttCellWidth >= 50 ? 'Tháng' : 'Tuần'}</span><button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setGanttCellWidth(value => Math.min(60, value + 10))} title="Phóng to">+</button><button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => document.getElementById('source-gantt-today')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })} title="Hôm nay">Hôm nay</button></div><div className="source-gantt-scroll"><div className="source-gantt-header" style={{ width: 240 + totalWidth }}><div className="source-gantt-label-header">Công việc</div><div className="source-gantt-timeline"><div className="source-gantt-months">{ganttMonths.map(month => <div key={month.key} style={{ width: month.days * ganttCellWidth }}>{month.label}</div>)}</div><div className="source-gantt-days">{ganttDays.map(day => <div key={day.toISOString()} className={day.getDay() === 0 || day.getDay() === 6 ? 'weekend' : ''} style={{ width: ganttCellWidth }}>{day.getDate()}</div>)}</div></div></div><div className="source-gantt-body" style={{ width: 240 + totalWidth }}>{todayOffset >= 0 && todayOffset <= ganttDays.length && <span id="source-gantt-today" className="source-gantt-today" style={{ left: 240 + todayOffset * ganttCellWidth }} />}{filteredWbsItems.map(item => { const start = parseTfsDate(item.startDate); const end = parseTfsDate(item.finishDate || item.targetDate || item.closedDate) || start; const startOffset = start ? Math.max(0, (start.getTime() - startMs) / dayMs) : 0; const duration = start && end ? Math.max(1, (end.getTime() - start.getTime()) / dayMs + 1) : 0; const status = item.statusCode >= 0 && item.statusCode < statusLabels.length ? statusLabels[item.statusCode] : (item.state || '—'); return <div className="source-gantt-row" key={item.id}><div className="source-gantt-task-label"><strong style={{ paddingLeft: item.parentId ? '1rem' : undefined }}>{item.parentId ? '↳ ' : ''}{item.taskCode || 'TFS-' + item.id} · {item.title || '(Không có tiêu đề)'}</strong><small>{status} · {item.progress}%</small></div><div className="source-gantt-track" style={{ width: totalWidth }}>{ganttDays.map(day => <span key={day.toISOString()} className={day.getDay() === 0 || day.getDay() === 6 ? 'weekend' : ''} style={{ width: ganttCellWidth }} />)}{duration > 0 && <span className={'source-gantt-bar' + (item.statusCode === 3 ? ' completed' : '')} style={{ left: startOffset * ganttCellWidth, width: duration * ganttCellWidth }} title={`${item.taskCode || 'TFS-' + item.id}: ${status}`}><i style={{ width: item.progress + '%' }} /></span>}</div></div>; })}</div></div></div>;
+  }
+
+  function renderSourceTaskGrid() {
+    if (dataLoading === 'work-items') return <LoadingState text="Đang tải danh sách task từ TFS…" />;
+    if (workItems.length === 0) return <EmptyState text="Vui lòng chọn dự án để xem danh sách task" />;
+    const statusLabels = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
+    const priorityLabels = ['', 'Thấp', 'Trung bình', 'Cao', 'Khẩn cấp'];
+    return <div className="table-wrapper source-task-grid"><div className="table-scroll-x"><table className="data-table project-tasks-table"><thead><tr><th className="col-sticky-left">STT</th><th>Mã</th><th>Tên công việc</th><th>Sản phẩm</th><th>Người thực hiện</th><th>Bắt đầu</th><th>Kết thúc</th><th>Tiến độ</th><th>Plan</th><th>Trạng thái</th><th>Ưu tiên</th><th>Người tạo</th><th className="col-sticky-right">Thao tác</th></tr></thead><tbody>{filteredWbsItems.map((item, index) => { const endDate = item.finishDate || item.targetDate || item.closedDate; const status = item.statusCode >= 0 && item.statusCode < statusLabels.length ? statusLabels[item.statusCode] : (item.state || '—'); return <tr key={item.id}><td className="col-sticky-left text-center">{index + 1}</td><td>{item.taskCode || 'TFS-' + item.id}</td><td><div className="task-name-cell" style={{ paddingLeft: item.parentId ? '1.25rem' : undefined }}><span>{item.parentId ? '↳ ' : ''}{item.title || '(Không có tiêu đề)'}</span></div></td><td>{item.product || '—'}</td><td>{item.assignedTo || '—'}</td><td className="text-center">{formatTaskDate(item.startDate)}</td><td className="text-center">{formatTaskDate(endDate)}</td><td><div className="progress-cell"><div className="progress-bar-wrapper"><div className="progress-bar-fill" style={{ width: item.progress + '%' }} /></div><span className="progress-text">{Math.round(item.progress)}%</span></div></td><td><div className="progress-cell"><div className="progress-bar-wrapper"><div className="progress-bar-fill" style={{ width: item.plan + '%', background: '#17a2b8' }} /></div><span className="progress-text">{Math.round(item.plan)}%</span></div></td><td><span className={'status-badge status-' + item.statusCode}>{status}</span></td><td><span className={'priority-badge priority-badge-' + item.priorityCode}>{priorityLabels[item.priorityCode] || 'Trung bình'}</span></td><td>{item.createdBy || '—'}</td><td className="col-sticky-right"><button type="button" className="project-work-item-link" onClick={() => void openWorkItem(item.id)}>Xem</button></td></tr>; })}</tbody></table><small className="muted project-table-note">Hiển thị {filteredWbsItems.length} / {workItemTotal} work items từ TFS. Chưa có thao tác tạo/sửa/xóa.</small><LoadMoreButton /></div></div>;
+  }
+
   function changeSheet(sheet: ProjectSheet) {
     if (!selected || !sheets.find(item => item.key === sheet)?.available) return;
     setActiveSheet(sheet);
@@ -218,15 +280,16 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
 
   const wbsIterations = useMemo(() => [...new Set(workItems.map(item => item.iterationPath || 'Chưa phân loại'))].sort((left, right) => left.localeCompare(right)), [workItems]);
   const wbsStates = useMemo(() => [...new Set(workItems.map(item => item.state || 'Không xác định'))].sort((left, right) => left.localeCompare(right)), [workItems]);
+  const wbsAssignees = useMemo(() => [...new Set(workItems.map(item => item.assignedTo || '—'))].sort((left, right) => left.localeCompare(right)), [workItems]);
   const filteredWbsItems = useMemo(() => {
     const search = wbsSearch.trim().toLocaleLowerCase();
     return workItems.filter(item => {
       const iteration = item.iterationPath || 'Chưa phân loại';
       const state = item.state || 'Không xác định';
       const matchesSearch = !search || [String(item.id), item.title, item.workItemType, item.assignedTo, iteration].some(value => value?.toLocaleLowerCase().includes(search));
-      return matchesSearch && (wbsState === 'all' || state === wbsState) && (wbsIteration === 'all' || iteration === wbsIteration) && (wbsPriority === 'all' || String(item.priorityCode) === wbsPriority);
+      return matchesSearch && (wbsState === 'all' || state === wbsState) && (wbsIteration === 'all' || iteration === wbsIteration) && (wbsPriority === 'all' || String(item.priorityCode) === wbsPriority) && (wbsAssignee === 'all' || (item.assignedTo || '—') === wbsAssignee);
     });
-  }, [workItems, wbsSearch, wbsState, wbsIteration, wbsPriority]);
+  }, [workItems, wbsSearch, wbsState, wbsIteration, wbsPriority, wbsAssignee]);
   const wbsStats = useMemo(() => {
     const completed = workItems.filter(item => item.statusCode === 3).length;
     const inProgress = workItems.filter(item => item.statusCode === 1).length;
@@ -251,6 +314,29 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     end.setDate(end.getDate() + 14);
     return { start, end, span: Math.max(1, end.getTime() - start.getTime()) };
   }, [filteredWbsItems]);
+  const ganttDays = useMemo(() => {
+    if (!ganttRange) return [];
+    const days: Date[] = [];
+    const cursor = new Date(ganttRange.start);
+    cursor.setHours(0, 0, 0, 0);
+    const end = new Date(ganttRange.end);
+    end.setHours(0, 0, 0, 0);
+    while (cursor <= end) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }, [ganttRange]);
+  const ganttMonths = useMemo(() => {
+    const months: Array<{ key: string; label: string; days: number }> = [];
+    for (const day of ganttDays) {
+      const key = `${day.getFullYear()}-${day.getMonth()}`;
+      const current = months[months.length - 1];
+      if (!current || current.key !== key) months.push({ key, label: day.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' }), days: 1 });
+      else current.days += 1;
+    }
+    return months;
+  }, [ganttDays]);
 
   function renderSheetContent() {
     if (!selected) return <EmptyState text="Chọn một dự án để xem nội dung quản lý dự án." />;
@@ -267,19 +353,24 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       </div>;
     }
 
-    if (activeSheet === 'teams') return teams.length === 0
-      ? <EmptyState text="TFS không trả về team nào cho dự án này." />
-      : <div className="project-table-wrap"><table className="project-table"><thead><tr><th>Team</th><th>Mô tả</th><th>URL</th></tr></thead><tbody>{teams.map(team => <tr key={team.id}><td><strong>{team.name}</strong><small>{team.id}</small></td><td>{team.description || '—'}</td><td className="break-all">{team.url || '—'}</td></tr>)}</tbody></table></div>;
+    if (activeSheet === 'teams') {
+      if (dataLoading === 'teams') return <LoadingState text="Đang tải teams từ TFS…" />;
+      return <div className="source-data-sheet"><div className="source-data-sheet-head"><div><strong>Teams</strong><span>Danh sách team thuộc project đang chọn từ TFS.</span></div><button type="button" className="btn btn-tools btn-sm" onClick={() => void loadProjectData('teams')} disabled={dataLoading !== null}>Làm mới</button></div>{teams.length === 0 ? <EmptyState text="TFS không trả về team nào cho dự án này." /> : <div className="project-table-wrap"><table className="project-table"><thead><tr><th>Team</th><th>Mô tả</th><th>URL</th></tr></thead><tbody>{teams.map(team => <tr key={team.id}><td><strong>{team.name}</strong><small>{team.id}</small></td><td>{team.description || '—'}</td><td className="break-all">{team.url || '—'}</td></tr>)}</tbody></table><small className="muted project-table-note">Hiển thị {teams.length} team. Dữ liệu đọc-only từ TFS.</small></div>}</div>;
+    }
 
-    if (activeSheet === 'iterations') return iterations.length === 0
-      ? <EmptyState text="TFS không trả về iteration nào cho dự án này." />
-      : <div className="project-table-wrap"><table className="project-table"><thead><tr><th>Iteration</th><th>Path</th><th>Time frame</th></tr></thead><tbody>{iterations.map(iteration => <tr key={iteration.id}><td><strong>{iteration.name}</strong><small>{iteration.id}</small></td><td>{iteration.path || '—'}</td><td>{iteration.timeFrame || '—'}</td></tr>)}</tbody></table></div>;
+    if (activeSheet === 'iterations') {
+      if (dataLoading === 'iterations') return <LoadingState text="Đang tải iterations từ TFS…" />;
+      return <div className="source-data-sheet"><div className="source-data-sheet-head"><div><strong>Iterations</strong><span>Iteration path và time frame do TFS trả về.</span></div><button type="button" className="btn btn-tools btn-sm" onClick={() => void loadProjectData('iterations')} disabled={dataLoading !== null}>Làm mới</button></div>{iterations.length === 0 ? <EmptyState text="TFS không trả về iteration nào cho dự án này." /> : <div className="project-table-wrap"><table className="project-table"><thead><tr><th>Iteration</th><th>Path</th><th>Time frame</th></tr></thead><tbody>{iterations.map(iteration => <tr key={iteration.id}><td><strong>{iteration.name}</strong><small>{iteration.id}</small></td><td>{iteration.path || '—'}</td><td>{iteration.timeFrame || '—'}</td></tr>)}</tbody></table><small className="muted project-table-note">Hiển thị {iterations.length} iteration. Dữ liệu đọc-only từ TFS.</small></div>}</div>;
+    }
 
-    if (activeSheet === 'work-items') return workItems.length === 0
-      ? <EmptyState text="Không có work item trong phạm vi truy vấn hiện tại." />
-      : <div className="project-table-wrap"><table className="project-table"><thead><tr><th>ID</th><th>Tiêu đề</th><th>Loại</th><th>Trạng thái</th><th>Assigned to</th></tr></thead><tbody>{workItems.map(item => <tr key={item.id}><td><button type="button" className="project-work-item-link" onClick={() => void openWorkItem(item.id)}>#{item.id}</button></td><td>{item.title || '(Không có tiêu đề)'}</td><td>{item.workItemType || '—'}</td><td><span className="project-status-chip">{item.state || '—'}</span></td><td>{item.assignedTo || '—'}</td></tr>)}</tbody></table><small className="muted project-table-note">Hiển thị {workItems.length} / {workItemTotal} work items. Đây là dữ liệu đọc-only từ TFS.</small><LoadMoreButton /></div>;
+    if (activeSheet === 'work-items') {
+      if (dataLoading === 'work-items') return <LoadingState text="Đang tải work items từ TFS…" />;
+      return <div className="source-data-sheet"><div className="source-data-sheet-head"><div><strong>Work items</strong><span>Work item đọc-only trong phạm vi truy vấn hiện tại.</span></div><button type="button" className="btn btn-tools btn-sm" onClick={() => void loadProjectData('work-items')} disabled={dataLoading !== null}>Làm mới</button></div>{workItems.length === 0 ? <EmptyState text="Không có work item trong phạm vi truy vấn hiện tại." /> : <div className="project-table-wrap"><table className="project-table"><thead><tr><th>ID</th><th>Tiêu đề</th><th>Loại</th><th>Trạng thái</th><th>Assigned to</th></tr></thead><tbody>{workItems.map(item => <tr key={item.id}><td><button type="button" className="project-work-item-link" onClick={() => void openWorkItem(item.id)}>#{item.id}</button></td><td>{item.title || '(Không có tiêu đề)'}</td><td>{item.workItemType || '—'}</td><td><span className="project-status-chip">{item.state || '—'}</span></td><td>{item.assignedTo || '—'}</td></tr>)}</tbody></table><small className="muted project-table-note">Hiển thị {workItems.length} / {workItemTotal} work items. Đây là dữ liệu đọc-only từ TFS.</small><LoadMoreButton /></div>}</div>;
+    }
 
-    if (activeSheet === 'wbs' && progressView === 'gantt') return workItems.length === 0
+    if (activeSheet === 'wbs' && progressView === 'gantt') return renderSourceGantt();
+
+    if (activeSheet === 'wbs' && progressView === 'legacy-gantt') return workItems.length === 0
       ? <EmptyState text="Không có work item để dựng Gantt trong phạm vi truy vấn hiện tại." />
       : !ganttRange
         ? <EmptyState text="TFS chưa trả về ngày bắt đầu/kết thúc cho các work item đã tải nên chưa thể dựng Gantt." />
@@ -321,11 +412,12 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
         <div className="page-title-row"><h1 className="page-title"><span className="title-icon">✓</span><span>Tiến độ dự án</span></h1></div>
         <div className="ig-tabs source-task-tabs" role="tablist"><button type="button" className="ig-tab" disabled title="Chờ nguồn dữ liệu Jarvis DB.">Tổng hợp</button><button type="button" className="ig-tab active" role="tab" aria-selected="true">Tiến độ dự án</button></div>
       </div>
-      <div className="page-toolbar source-task-toolbar"><div className="toolbar-filters"><select className="form-control filter-select" value={selected ? selected.collection + '/' + selected.id : ''} onChange={event => { const project = projects.find(item => item.collection + '/' + item.id === event.target.value); if (project) void selectProject(project); }}><option value="">-- Chọn dự án --</option>{projects.map(project => <option key={project.collection + '/' + project.id} value={project.collection + '/' + project.id}>{project.name}</option>)}</select><select className="form-control filter-select" value={wbsState} onChange={event => setWbsState(event.target.value)}><option value="all">-- Trạng thái --</option>{wbsStates.map(state => <option key={state} value={state}>{state}</option>)}</select><select className="form-control filter-select" value="all" disabled title="Bộ lọc người thực hiện sẽ dùng danh mục user Jarvis."><option value="all">-- Người thực hiện --</option></select><select className="form-control filter-select" value={wbsPriority} onChange={event => setWbsPriority(event.target.value)}><option value="all">-- Độ ưu tiên --</option><option value="1">Thấp</option><option value="2">Trung bình</option><option value="3">Cao</option><option value="4">Khẩn cấp</option></select></div><div className="toolbar-actions"><div className="btn-group view-toggle source-view-toggle"><button type="button" className={'btn btn-outline-secondary btn-sm' + (progressView === 'list' ? ' active' : '')} onClick={() => setProgressView('list')} title="Danh sách">☷</button><button type="button" className={'btn btn-outline-secondary btn-sm' + (progressView === 'gantt' ? ' active' : '')} onClick={() => setProgressView('gantt')} title="Gantt Chart">▤</button><button type="button" className="btn btn-outline-secondary btn-sm" disabled title="Chờ API Resource của Jarvis DB.">♙</button></div><button type="button" className="btn btn-tools" onClick={() => void loadProjectData('work-items')} disabled={!selected || dataLoading !== null}>Làm mới</button></div></div>
+      <div className="page-toolbar source-task-toolbar"><div className="toolbar-filters"><select className="form-control filter-select" value={selected ? selected.collection + '/' + selected.id : ''} onChange={event => { const project = projects.find(item => item.collection + '/' + item.id === event.target.value); if (project) void selectProject(project); }}><option value="">-- Chọn dự án --</option>{projects.map(project => <option key={project.collection + '/' + project.id} value={project.collection + '/' + project.id}>{project.name}</option>)}</select><select className="form-control filter-select" value={wbsState} onChange={event => setWbsState(event.target.value)}><option value="all">-- Trạng thái --</option>{wbsStates.map(state => <option key={state} value={state}>{state}</option>)}</select><select className="form-control filter-select" value={wbsAssignee} onChange={event => setWbsAssignee(event.target.value)}><option value="all">-- Người thực hiện --</option>{wbsAssignees.map(assignee => <option key={assignee} value={assignee}>{assignee}</option>)}</select><select className="form-control filter-select" value={wbsPriority} onChange={event => setWbsPriority(event.target.value)}><option value="all">-- Độ ưu tiên --</option><option value="1">Thấp</option><option value="2">Trung bình</option><option value="3">Cao</option><option value="4">Khẩn cấp</option></select></div><div className="toolbar-actions"><div className="btn-group view-toggle source-view-toggle"><button type="button" className={'btn btn-outline-secondary btn-sm' + (progressView === 'list' ? ' active' : '')} onClick={() => setProgressView('list')} title="Danh sách">☷</button><button type="button" className={'btn btn-outline-secondary btn-sm' + (progressView === 'gantt' ? ' active' : '')} onClick={() => setProgressView('gantt')} title="Gantt Chart">▤</button><button type="button" className="btn btn-outline-secondary btn-sm" disabled title="Chờ API Resource của Jarvis DB.">♙</button></div><button type="button" className="btn btn-tools" disabled title="Chờ API công cụ của Jarvis DB.">Công cụ</button><button type="button" className="btn btn-tools" disabled title="Chờ API đường găng của Jarvis DB.">Đường găng</button><button type="button" className="btn btn-tools" disabled title="Chờ API Baseline của Jarvis DB.">Baseline</button><button type="button" className="btn btn-tools" disabled title="Chờ API lịch sử của Jarvis DB.">Lịch sử</button><button type="button" className="btn btn-tools" disabled title="Chờ API xuất nhập của Jarvis DB.">Xuất/Nhập</button><button type="button" className="btn btn-tools" onClick={() => void loadProjectData('work-items')} disabled={!selected || dataLoading !== null}>Làm mới</button></div></div>
       {error && <p className="error">{error}</p>}
       {loading && <div className="projectmanagement-state">Đang tải danh sách dự án…</div>}
       {!loading && !selected && <div className="projectmanagement-state">Vui lòng chọn dự án để xem danh sách task</div>}
-      {!loading && selected && <div className="project-tasks-content">{renderSheetContent()}</div>}
+      {!loading && selected && workItems.length > 0 && <div className="summary-stats source-summary-stats"><div className="stat-card"><div className="stat-icon stat-icon-total">#</div><div className="stat-content"><div className="stat-value">{wbsStats.total}</div><div className="stat-label">Tổng Task</div></div></div><div className="stat-card"><div className="stat-icon stat-icon-success">✓</div><div className="stat-content"><div className="stat-value">{wbsStats.completed}</div><div className="stat-label">Hoàn thành</div></div></div><div className="stat-card"><div className="stat-icon stat-icon-warning">◷</div><div className="stat-content"><div className="stat-value">{wbsStats.inProgress}</div><div className="stat-label">Đang thực hiện</div></div></div><div className="stat-card"><div className="stat-icon stat-icon-danger">!</div><div className="stat-content"><div className="stat-value">{wbsStats.overdue}</div><div className="stat-label">Quá hạn</div></div></div><div className="stat-card"><div className="stat-icon stat-icon-info">↗</div><div className="stat-content"><div className="stat-value">{wbsStats.progress}%</div><div className="stat-label">Tiến độ TB</div></div></div></div>}
+      {!loading && selected && <div className="project-tasks-content">{progressView === 'list' ? renderSourceTaskGrid() : renderSheetContent()}</div>}
     </section>;
   }
 

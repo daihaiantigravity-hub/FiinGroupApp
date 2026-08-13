@@ -11,6 +11,36 @@ export type LegacyDashboardStats = {
   pending: { count: number };
 };
 
+export type LegacyWikiItem = {
+  id: number;
+  category: string | null;
+  product: string | null;
+  business_area: string | null;
+  client: string | null;
+  title: string | null;
+  root_cause: string | null;
+  diagnosis: string | null;
+  solution: string | null;
+  keyword: string | null;
+  level: string | null;
+  status: number | null;
+  created_by: string | null;
+};
+
+export type LegacyAnnouncementItem = {
+  id: number;
+  category: string | null;
+  priority: number | null;
+  title: string | null;
+  content_type: string | null;
+  is_public: boolean | number | null;
+  publish_date: string | null;
+  expire_date: string | null;
+  created_by: string | null;
+  status: number | null;
+  is_pinned: boolean | number | null;
+};
+
 function mapDashboardStats(value: unknown): LegacyDashboardStats {
   const root = (value ?? {}) as Record<string, unknown>;
   const employees = (root.employees ?? {}) as Record<string, unknown>;
@@ -72,6 +102,16 @@ export function createLegacyAuthClient(options: AuthClientOptions = {}) {
     async dashboardStats(): Promise<LegacyDashboardStats> {
       const payload = await request<LegacyResponse>('/dashboard/stats');
       return mapDashboardStats(payload.data);
+    },
+    async wikiList(filters: Record<string, string> = {}): Promise<LegacyWikiItem[]> {
+      const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)));
+      const payload = await request<LegacyResponse>('/mt_wikis?' + query.toString());
+      return Array.isArray(payload.data) ? payload.data as LegacyWikiItem[] : [];
+    },
+    async announcementList(filters: Record<string, string> = {}): Promise<LegacyAnnouncementItem[]> {
+      const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)));
+      const payload = await request<LegacyResponse>('/mt_announcements?' + query.toString());
+      return Array.isArray(payload.data) ? payload.data as LegacyAnnouncementItem[] : [];
     },
     async logout(): Promise<void> { try { await request('/auth/logout', { method: 'POST' }); } finally { accessToken = null; } },
   };

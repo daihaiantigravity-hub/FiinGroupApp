@@ -182,3 +182,106 @@
 
 - Fixed manifest deserialization to accept the repository's lower-case JSON property names.
 - Added explicit validation for the target database and non-empty migration list before execution.
+
+## 2026-08-13 — TFS project-management UI compatibility slice
+
+- Compared the target project-management and project-tasks layouts with the trusted
+  Jarvis HTML/CSS/JavaScript source.
+- Added the Jarvis-aligned project-management sheet shell and project-tasks toolbar,
+  task grid columns, filters, summary cards and read-only Gantt projection.
+- Extended the TFS work-item projection with source-aligned status, progress, plan,
+  priority, product, creator and date fallback mappings.
+- Kept Jarvis DB-backed summary, PMBOK data, resource view and all mutations outside
+  the target until their source contract and database access are approved.
+- Verified TypeScript strict compilation, Vite production build and .NET API build;
+  no legacy repository files were modified.
+
+## 2026-08-13 — TFS browser usability checkpoint
+
+- Added source-aligned loading, empty, refresh and count states for Teams,
+  Iterations and Work items in the target browser.
+- Kept all three views read-only and backed by the existing approved TFS API
+  contracts; no new mutation or database dependency was introduced.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Project-task toolbar parity checkpoint
+
+- Added the remaining Jarvis task-toolbar controls to the target UI as disabled
+  read-only controls: Công cụ, Đường găng, Baseline, Lịch sử and Xuất/Nhập.
+- Each unavailable control explains that its Jarvis DB/API contract is not yet
+  available; no placeholder action or mutation was added.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Project-management TFS KPI checkpoint
+
+- When a project is selected in `projectmanagement`, the target now loads Teams
+  and Work items from the existing TFS read-only APIs so the source-aligned KPI
+  strip is populated immediately.
+- Jarvis DB-backed `pm-flow` data remains explicitly unavailable; no business
+  metrics are fabricated and no mutation path was added.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Project selection persistence checkpoint
+
+- Matched Jarvis `projectmanagement.lastProject` behavior in the target
+  project-management page.
+- Only the selected collection/project key is persisted in browser storage;
+  credentials, session tokens and TFS response data are not persisted.
+- Persistence failure is non-blocking and does not prevent TFS data loading.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Navigation icon parity checkpoint
+
+- Replaced target navigation Unicode glyphs with inline SVG icons aligned to the
+  trusted Jarvis navigation for Dashboard, project management, project tasks and
+  profile.
+- Changed presentation only; routes, permissions and business behavior are
+  unchanged.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Dashboard UI compatibility checkpoint
+
+- Reworked the target Dashboard shell toward the trusted Jarvis layout: greeting,
+  four management stat cards and activity/announcement widgets.
+- Employee, project, revenue and pending values use the approved dashboard read
+  model when available; otherwise the UI shows an explicit unavailable state and
+  never fabricates metrics.
+- Kept the technical platform/session status section visible for the migration
+  pilot and added responsive behavior for the new dashboard cards.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Profile UI compatibility checkpoint
+
+- Reworked the target profile page to follow Jarvis `employees-info`: page title,
+  avatar/sidebar summary, account information card and profile tabs.
+- Kept profile data limited to the authenticated target-session contract; fields
+  without an approved profile API remain explicit unavailable/read-only states.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Wiki and announcements UI compatibility checkpoint
+
+- Added React routes `/wiki` and `/announcements` using the Jarvis source toolbar,
+  filters, table columns, read-only detail modal and empty/loading/error states.
+- Added legacy list adapters for `/api/v1/mt_wikis` and `/api/v1/mt_announcements`
+  without changing the Jarvis repository or API.
+- Target TFS sessions show the explicit API boundary; create/edit/delete controls
+  remain disabled until target contracts and permissions are approved.
+- Re-ran TypeScript strict, Vite production and .NET API builds successfully.
+
+## 2026-08-13 — Content filter and AI-DLC contract checkpoint
+
+- Matched source filter behavior for Wiki and announcements: category and
+  level/priority reload the list, while full-text search is debounced.
+- Added `construction/content-compatibility.md` with source mapping, target
+  boundary and acceptance checks.
+- Marked Wiki/documents/announcements as an in-progress construction unit in
+  `aidlc-state.md`.
+- Frontend test suite passed: 2 files and 6 tests; TypeScript, Vite and .NET
+  builds also passed with zero errors.
+
+## 2026-08-13 — Content adapter contract-test checkpoint
+
+- Added contract coverage for filtered Wiki and announcements list requests,
+  bearer propagation and empty-list responses.
+- Frontend test suite now passes: 2 files and 8 tests.
+- TypeScript strict, Vite production and .NET API builds remain green.
