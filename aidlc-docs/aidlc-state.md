@@ -22,7 +22,7 @@
 
 ### CONSTRUCTION
 
-- [ ] Application Platform
+- [~] Application Platform — React shell, target API health, TFS pilot session and read-only platform dashboard implemented
 - [~] Authentication and user profile — TFS target login plus in-memory pilot session/profile/permission contracts; persistent store and 2FA migration pending
 
 ## Migration decision

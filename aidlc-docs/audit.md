@@ -146,3 +146,9 @@
 - Confirmed Jarvis TFS login intentionally returns empty form/action permissions because the TFS identity has no Jarvis database permission row.
 - Preserved separate form permissions and action permissions in the target React auth state.
 - Added target route-guard support for form access and explicit action codes; no business module is enabled by this slice.
+
+## 2026-08-13 — Application Platform dashboard slice
+
+- Added a React read-only platform dashboard for authenticated pilot users.
+- Added target API ping/health visibility and permission/session summaries.
+- Kept Jarvis business dashboard data behind a documented read-only adapter boundary; no legacy data mutation or fabricated target metrics were introduced.
