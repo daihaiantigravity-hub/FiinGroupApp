@@ -43,6 +43,30 @@ public sealed class TfsAuthorizationTests
     }
 
     [Fact]
+    public void Allows_create_only_when_add_is_granted()
+    {
+        var readable = new AuthenticatedUser(
+            new UserProfile(Guid.NewGuid(), "alice", "Alice", null, []),
+            new PermissionSet(
+                new Dictionary<string, PermissionFlags>
+                {
+                    ["project-tasks"] = new(true, true, false, false, false, false, false, false, false, false)
+                },
+                new HashSet<string>()));
+        var creator = new AuthenticatedUser(
+            new UserProfile(Guid.NewGuid(), "alice", "Alice", null, []),
+            new PermissionSet(
+                new Dictionary<string, PermissionFlags>
+                {
+                    ["project-tasks"] = new(true, true, true, false, false, false, false, false, false, false)
+                },
+                new HashSet<string>()));
+
+        Assert.False(TfsAuthorization.CanCreate(readable, "project-tasks"));
+        Assert.True(TfsAuthorization.CanCreate(creator, "project-tasks"));
+    }
+
+    [Fact]
     public async Task Invalid_tfs_base_url_is_rejected_before_network_call()
     {
         var reader = new TfsProjectReader(new TfsOptions { Enabled = true, BaseUrl = "not-a-url" });

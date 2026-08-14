@@ -4,7 +4,7 @@ var options = ParseArgs(args);
 var required = new[] { "connection", "confirm-database", "username" };
 if (required.Any(key => !options.ContainsKey(key)) || options.GetValueOrDefault("confirm-database") != "FiinGroupApp.Identity")
 {
-    Console.Error.WriteLine("Usage: dotnet run -- --connection <connection-string> --confirm-database FiinGroupApp.Identity --username <target-user>");
+    Console.Error.WriteLine("Usage: dotnet run -- --connection <connection-string> --confirm-database FiinGroupApp.Identity --username <target-user> [--allow-add true]");
     return 2;
 }
 
@@ -38,13 +38,16 @@ if (userId is null)
     return 6;
 }
 
-var roleId = await EnsureRoleAsync(connection);
+var allowAdd = string.Equals(options.GetValueOrDefault("allow-add"), "true", StringComparison.OrdinalIgnoreCase);
+var roleId = await EnsureRoleAsync(connection, allowAdd);
 foreach (var formCode in new[] { "pm-projects", "projectmanagement", "project-tasks" })
-    await EnsurePermissionAsync(connection, roleId, formCode);
+    await EnsurePermissionAsync(connection, roleId, formCode, allowAdd);
 await EnsureUserRoleAsync(connection, userId.Value, roleId);
 
-Console.WriteLine($"Granted read-only TFS project permissions to: {username}");
-Console.WriteLine("Granted actions: ACCESS, VIEW only. No ADD, EDIT, DELETE, IMPORT, EXPORT or APPROVE permission was granted.");
+Console.WriteLine($"Granted TFS project permissions to: {username}");
+Console.WriteLine(allowAdd
+    ? "Granted actions: ACCESS, VIEW, ADD. EDIT, DELETE, IMPORT, EXPORT and APPROVE remain disabled."
+    : "Granted actions: ACCESS, VIEW only. No ADD, EDIT, DELETE, IMPORT, EXPORT or APPROVE permission was granted.");
 return 0;
 
 static async Task<Guid?> FindUserIdAsync(MySqlConnection connection, string username)
@@ -55,9 +58,9 @@ static async Task<Guid?> FindUserIdAsync(MySqlConnection connection, string user
     return value is null || value is DBNull ? null : value is Guid guid ? guid : Guid.Parse(Convert.ToString(value)!);
 }
 
-static async Task<Guid> EnsureRoleAsync(MySqlConnection connection)
+static async Task<Guid> EnsureRoleAsync(MySqlConnection connection, bool allowAdd)
 {
-    const string code = "TFS_READONLY";
+    var code = allowAdd ? "TFS_TASK_CREATOR" : "TFS_READONLY";
     await using var find = new MySqlCommand("SELECT id FROM app_roles WHERE code = @code LIMIT 1", connection);
     find.Parameters.AddWithValue("@code", code);
     var existing = await find.ExecuteScalarAsync();
@@ -67,14 +70,14 @@ static async Task<Guid> EnsureRoleAsync(MySqlConnection connection)
     await using var insert = new MySqlCommand("INSERT INTO app_roles (id, code, name) VALUES (@id, @code, @name)", connection);
     insert.Parameters.AddWithValue("@id", id);
     insert.Parameters.AddWithValue("@code", code);
-    insert.Parameters.AddWithValue("@name", "TFS read-only project access");
+    insert.Parameters.AddWithValue("@name", allowAdd ? "TFS task creator" : "TFS read-only project access");
     await insert.ExecuteNonQueryAsync();
     return id;
 }
 
-static async Task EnsurePermissionAsync(MySqlConnection connection, Guid roleId, string formCode)
+static async Task EnsurePermissionAsync(MySqlConnection connection, Guid roleId, string formCode, bool allowAdd)
 {
-    foreach (var action in new[] { "ACCESS", "VIEW" })
+    foreach (var action in allowAdd ? new[] { "ACCESS", "VIEW", "ADD" } : new[] { "ACCESS", "VIEW" })
     {
         await using var find = new MySqlCommand("SELECT id FROM app_permissions WHERE resource_code = @resource AND action_code = @action LIMIT 1", connection);
         find.Parameters.AddWithValue("@resource", formCode);

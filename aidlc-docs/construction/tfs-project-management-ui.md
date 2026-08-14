@@ -2,7 +2,7 @@
 
 ## Mục tiêu
 
-Màn `/projects` của React được tổ chức theo bố cục quản lý dự án trong
+Hai màn `/projectmanagement` và `/project-tasks` của React được tổ chức theo bố cục quản lý dự án trong
 `FiinGroup.Jarvis/pages/projects/projectmanagement.html`, nhưng chỉ triển khai
 phần đọc dữ liệu TFS đã có contract ở API v2.
 
@@ -67,7 +67,7 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
 ## Kiểm thử thủ công
 
 1. Dùng Node.js 20.19+; chạy frontend với `VITE_AUTH_MODE=target-dev` và đăng nhập TFS.
-2. Mở `/projects` hoặc `/projectmanagement`, xác nhận danh sách collection/project giống kết quả
+2. Mở `/projectmanagement`, xác nhận danh sách collection/project giống kết quả
    `GET /api/v2/tfs/projects`.
 3. Chọn `FiinGroup.Jarvis` hoặc `FiinGate` và kiểm tra lần lượt các sheet
    Teams, Iterations, Work items.
@@ -139,3 +139,18 @@ an isolated task row. Therefore the target cannot truthfully bind a selected
 TFS project to the Jarvis PM flow or enable the source editor save/delete
 actions yet. The target keeps those controls at the explicit migration
 boundary until an approved project mapping and source data snapshot exist.
+
+## TFS task creation pilot - 2026-08-14
+
+The Task detail popup is now available from both project-management views and
+remains read-only. The "Thêm Task" form follows the source task fields that can
+be represented by TFS and creates a TFS work item directly through the target
+API. It does not write to the inaccessible Jarvis database and does not claim
+to replace the source PMBOK task model.
+
+Creation is disabled by default. It requires both Tfs:WriteEnabled=true and
+the authenticated user's ADD permission for project-tasks or projectmanagement.
+The permission provisioner grants this only when called with --allow-add true;
+the default remains ACCESS, VIEW only. Update, delete, progress, baseline,
+dependency and PMBOK persistence remain disabled until their source contracts
+and data stores are approved.

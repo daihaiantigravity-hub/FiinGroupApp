@@ -6,9 +6,11 @@ import {
   getTfsTeams,
   getTfsWorkItem,
   getTfsWorkItems,
+  createTfsWorkItem,
   type TfsIteration,
   type TfsProject,
   type TfsTeam,
+  type TfsCreateWorkItemRequest,
   type TfsWorkItemDetail,
   type TfsWorkItem,
 } from '../auth/tfsProjectClient';
@@ -79,6 +81,45 @@ function ToolMenuIcon({ kind }: { kind: ToolMenuIconKind }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>;
 }
 
+function TfsTaskCreateModal({ project, workItems, onClose, onCreated }: { project: TfsProject; workItems: TfsWorkItem[]; onClose: () => void; onCreated: (item: TfsWorkItemDetail) => void }) {
+  const [form, setForm] = useState<TfsCreateWorkItemRequest>({ workItemType: 'Task', title: '', priority: 2 });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const assignees = [...new Set(workItems.map(item => item.assignedTo).filter((value): value is string => Boolean(value)))].sort();
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.title.trim()) { setError('Vui lòng nhập tên công việc.'); return; }
+    setSaving(true); setError(null);
+    try {
+      const item = await createTfsWorkItem(project, { ...form, title: form.title.trim() });
+      onCreated(item);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Không thể tạo work item trên TFS.');
+    } finally { setSaving(false); }
+  }
+  const update = (field: keyof TfsCreateWorkItemRequest, value: string | number | undefined) => setForm(previous => ({ ...previous, [field]: value }));
+  return <div className="work-item-modal" role="dialog" aria-modal="true" aria-labelledby="create-work-item-title">
+    <button type="button" className="work-item-modal-backdrop" aria-label="Đóng form tạo task" onClick={onClose} />
+    <form className="work-item-modal-panel tfs-create-task-panel" onSubmit={submit}>
+      <header><div><p className="eyebrow">TFS Work Item · {project.name}</p><h3 id="create-work-item-title">Thêm Task mới</h3></div><button type="button" className="work-item-modal-close" onClick={onClose} aria-label="Đóng">×</button></header>
+      <div className="tfs-create-task-grid">
+        <label className="tfs-create-task-wide">Tên công việc <span className="required">*</span><input value={form.title} onChange={event => update('title', event.target.value)} autoFocus maxLength={250} /></label>
+        <label>Loại Work Item<input value={form.workItemType ?? 'Task'} onChange={event => update('workItemType', event.target.value)} /></label>
+        <label>Độ ưu tiên<select value={form.priority ?? 2} onChange={event => update('priority', Number(event.target.value))}><option value="1">Thấp</option><option value="2">Trung bình</option><option value="3">Cao</option><option value="4">Khẩn cấp</option></select></label>
+        <label>Người thực hiện<input list="tfs-create-assignees" value={form.assignedTo ?? ''} onChange={event => update('assignedTo', event.target.value)} /><datalist id="tfs-create-assignees">{assignees.map(value => <option key={value} value={value} />)}</datalist></label>
+        <label>Iteration Path<input value={form.iterationPath ?? ''} onChange={event => update('iterationPath', event.target.value)} placeholder={project.name} /></label>
+        <label>Ngày bắt đầu<input type="date" value={form.startDate ?? ''} onChange={event => update('startDate', event.target.value)} /></label>
+        <label>Ngày kết thúc<input type="date" value={form.finishDate ?? ''} onChange={event => update('finishDate', event.target.value)} /></label>
+        <label>Task cha<select value={form.parentId ?? ''} onChange={event => update('parentId', event.target.value ? Number(event.target.value) : undefined)}><option value="">-- Không có --</option>{workItems.map(item => <option key={item.id} value={item.id}>#{item.id} {item.title || '(Không có tiêu đề)'}</option>)}</select></label>
+        <label className="tfs-create-task-wide">Tags<input value={form.tags ?? ''} onChange={event => update('tags', event.target.value)} placeholder="tag1; tag2" /></label>
+        <label className="tfs-create-task-wide">Mô tả<textarea rows={4} value={form.description ?? ''} onChange={event => update('description', event.target.value)} maxLength={5000} /></label>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <footer><span className="muted">Dữ liệu sẽ được tạo trực tiếp trên TFS; không ghi vào Jarvis DB.</span><button type="button" className="btn btn-tools" onClick={onClose} disabled={saving}>Hủy</button><button type="submit" className="source-add-task" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu Task'}</button></footer>
+    </form>
+  </div>;
+}
+
 type TfsPageKind = 'browser' | 'management' | 'tasks';
 const projectManagementStorageKey = 'projectmanagement.lastProject';
 
@@ -100,6 +141,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   const [dataLoading, setDataLoading] = useState<ProjectSheet | null>(null);
   const [workItemDetail, setWorkItemDetail] = useState<TfsWorkItemDetail | null>(null);
   const [workItemDetailLoading, setWorkItemDetailLoading] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const taskGridRef = useRef<HTMLDivElement>(null);
@@ -204,6 +246,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     setLoadedSheets(new Set());
     setWorkItemDetail(null);
     setWorkItemDetailLoading(false);
+    setCreateTaskOpen(false);
     setWbsSearch('');
     setWbsState('all');
     setWbsIteration('all');
@@ -258,6 +301,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     setProgressView('list');
     setGanttCellWidth(30);
     setWorkItemDetailLoading(false);
+    setCreateTaskOpen(false);
     try {
       const projectDetail = await getTfsProject(project);
       if (requestId !== projectRequestRef.current) return;
@@ -525,7 +569,15 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     </div>;
   }
 
-  if (!targetMode) return <section className="platform-card"><h2>{progressMode ? 'Tiến độ dự án' : 'TFS Projects'}</h2><p>Chuyển frontend sang <code>VITE_AUTH_MODE=target-dev</code> để sử dụng phiên TFS của hệ thống mới.</p></section>;
+  function renderWorkItemModal() {
+    if (!workItemDetail) return null;
+    return <div className="work-item-modal" role="dialog" aria-modal="true" aria-labelledby="active-work-item-detail-title">
+      <button type="button" className="work-item-modal-backdrop" aria-label="Đóng chi tiết work item" onClick={() => setWorkItemDetail(null)} />
+      <article className="work-item-modal-panel"><header><div><p className="eyebrow">TFS Work Item #{workItemDetail.id}</p><h3 id="active-work-item-detail-title">{workItemDetail.title || '(Không có tiêu đề)'}</h3></div><button type="button" className="work-item-modal-close" onClick={() => setWorkItemDetail(null)} aria-label="Đóng">×</button></header><div className="work-item-detail-grid"><div><span>Loại</span><strong>{workItemDetail.workItemType || '—'}</strong></div><div><span>Trạng thái</span><strong>{workItemDetail.state || '—'}</strong></div><div><span>Người thực hiện</span><strong>{workItemDetail.assignedTo || '—'}</strong></div><div><span>Iteration</span><strong>{workItemDetail.iterationPath || '—'}</strong></div><div><span>Ngày tạo</span><strong>{formatTaskDate(workItemDetail.createdDate)}</strong></div><div><span>Cập nhật</span><strong>{formatTaskDate(workItemDetail.changedDate)}</strong></div><div><span>Task cha</span><strong>{workItemDetail.parentId ? '#' + workItemDetail.parentId : '—'}</strong></div><div><span>Priority</span><strong>{workItemDetail.priority || '—'}</strong></div></div>{workItemDetail.description && <div className="work-item-detail-block"><span>Description</span><p>{workItemDetail.description}</p></div>}{workItemDetail.tags && <div className="work-item-detail-block"><span>Tags</span><p>{workItemDetail.tags}</p></div>}{workItemDetail.history && <div className="work-item-detail-block"><span>History</span><p>{workItemDetail.history}</p></div>}<footer><span className="muted">Read-only từ TFS. Chưa có thao tác cập nhật.</span>{workItemDetail.url && <a href={workItemDetail.url} target="_blank" rel="noreferrer">Mở trên TFS</a>}</footer></article>
+    </div>;
+  }
+
+  if (!targetMode) return <section className="platform-card"><h2>{progressMode ? 'Tiến độ dự án' : 'Quản lý dự án'}</h2><p>Chuyển frontend sang <code>VITE_AUTH_MODE=target-dev</code> để sử dụng phiên TFS của hệ thống mới.</p></section>;
 
   if (pageKind === 'management') {
     return <section className="projectmanagement sheetmode">
@@ -540,13 +592,14 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       {!loading && selected && <>
         {activeSheet === 'overview' && <>
           <div className="projectmanagement-summary"><div className="sb-proj"><div className="t" title={selected.name}>{selected.name}</div><div className="m">Collection: {selected.collection} · Trạng thái: {selected.state || '—'}</div></div><div className="sb-kpi"><div className="k">Teams</div><div className="v">{loadedSheets.has('teams') ? teams.length : '—'}</div></div><div className="sb-kpi exec"><div className="k">Work items</div><div className="v">{loadedSheets.has('work-items') ? workItemTotal : '—'}</div></div></div>
-          <div className="projectmanagement-state">Chưa có dữ liệu `pm-flow` từ Jarvis DB trong hệ thống mới. Thông tin TFS của dự án đã được xác thực ở màn TFS Projects.</div>
+          <div className="projectmanagement-state">Chưa có dữ liệu `pm-flow` từ Jarvis DB trong hệ thống mới. Phần dữ liệu TFS hiện tại chỉ hiển thị theo chế độ đọc.</div>
         </>}
         {activeSheet === 'wbs' && <div className="projectmanagement-wbs-host">{renderSheetContent()}</div>}
       </>}
-      {selected?.url && <a className="project-api-link" href={selected.url} target="_blank" rel="noreferrer">Mở project API URL</a>}
-      {renderNoticeModal()}
-    </section>;
+       {selected?.url && <a className="project-api-link" href={selected.url} target="_blank" rel="noreferrer">Mở project API URL</a>}
+       {renderNoticeModal()}
+       {renderWorkItemModal()}
+     </section>;
   }
 
   if (pageKind === 'tasks') {
@@ -555,7 +608,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
         <div className="page-title-row"><h1 className="page-title"><span className="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg></span><span>Tiến độ dự án</span></h1></div>
         <div className="ig-tabs source-task-tabs" role="tablist"><button type="button" className="ig-tab" disabled title="Chờ nguồn dữ liệu Jarvis DB.">Tổng hợp</button><button type="button" className="ig-tab active" role="tab" aria-selected="true">Tiến độ dự án</button></div>
       </div>
-       <div className="page-toolbar source-task-toolbar"><div className="toolbar-filters"><select className="form-control filter-select" value={selected ? selected.collection + '/' + selected.id : ''} onChange={event => { const project = projects.find(item => item.collection + '/' + item.id === event.target.value); if (project) void selectProject(project); else clearProjectSelection(); }}><option value="">-- Chọn dự án --</option>{projects.map(project => <option key={project.collection + '/' + project.id} value={project.collection + '/' + project.id}>{project.name}</option>)}</select><select className="form-control filter-select" value={wbsState} onChange={event => setWbsState(event.target.value)}><option value="all">-- Trạng thái --</option>{wbsStates.map(state => <option key={state} value={state}>{state}</option>)}</select><select className="form-control filter-select" value={wbsAssignee} onChange={event => setWbsAssignee(event.target.value)}><option value="all">-- Người thực hiện --</option>{wbsAssignees.map(assignee => <option key={assignee} value={assignee}>{assignee}</option>)}</select><select className="form-control filter-select" value={wbsPriority} onChange={event => setWbsPriority(event.target.value)}><option value="all">-- Độ ưu tiên --</option><option value="1">Thấp</option><option value="2">Trung bình</option><option value="3">Cao</option><option value="4">Khẩn cấp</option></select></div><div className="toolbar-actions"><div className="btn-group view-toggle source-view-toggle" role="group"><input type="radio" className="btn-check" name="projectTaskViewMode" id="projectTaskViewGrid" value="list" checked={progressView === 'list'} onChange={() => setProgressView('list')} /><label className={'btn btn-outline-secondary btn-sm' + (progressView === 'list' ? ' active' : '')} htmlFor="projectTaskViewGrid" title="Danh sách"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg></label><input type="radio" className="btn-check" name="projectTaskViewMode" id="projectTaskViewGantt" value="gantt" checked={progressView === 'gantt'} onChange={() => setProgressView('gantt')} /><label className={'btn btn-outline-secondary btn-sm' + (progressView === 'gantt' ? ' active' : '')} htmlFor="projectTaskViewGantt" title="Gantt Chart"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="4" rx="1" /><rect x="5" y="10" width="12" height="4" rx="1" /><rect x="7" y="16" width="8" height="4" rx="1" /></svg></label><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => showBoundaryNotice('Phân bổ nguồn lực', 'Chức năng này cần nguồn dữ liệu Resource của Jarvis DB và chưa được chuyển sang API mới.')} title="Chờ API Resource của Jarvis DB."><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></button></div><div className={'pm-tools' + (toolsOpen ? ' open' : '')}><button type="button" className="btn btn-tools" onClick={() => setToolsOpen(value => !value)} title="Công cụ khác"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></svg><span>Công cụ</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="arrow"><polyline points="6 9 12 15 18 9" /></svg></button>{toolsOpen && <div className="pm-tools-menu"><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Đồng bộ dự án', 'Chưa có API ghi đồng bộ TFS vào hệ thống mới. Không có dữ liệu nào được thay đổi.')}><ToolMenuIcon kind="sync" /><span>Đồng bộ dự án đang chọn</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Đường găng', 'Logic đường găng của Jarvis chưa có nguồn dữ liệu tương đương trong hệ thống mới.')}><ToolMenuIcon kind="critical" /><span>Đường găng</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Baseline', 'Chức năng Baseline chưa được chuyển đổi vì chưa có API lưu trữ tương đương.')}><ToolMenuIcon kind="baseline" /><span>Baseline</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Lịch sử', 'Chức năng lịch sử hoạt động cần dữ liệu Jarvis DB và chưa khả dụng trong bản read-only này.')}><ToolMenuIcon kind="history" /><span>Lịch sử</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Xuất/Nhập', 'Chức năng xuất/nhập task chưa được bật để tránh ghi sai dữ liệu TFS.')}><ToolMenuIcon kind="export" /><span>Xuất/Nhập</span></button><button type="button" className="btn-tool-item" onClick={() => { setToolsOpen(false); if (selected) void loadProjectData('work-items'); }} disabled={!selected || dataLoading !== null}><ToolMenuIcon kind="refresh" /><span>Làm mới</span></button></div>}</div><button type="button" className="source-add-task" onClick={() => selected ? showBoundaryNotice('Thêm Task', 'Tạo task sẽ được bật sau khi có API mutation được phê duyệt. Bản hiện tại chỉ đọc dữ liệu TFS.') : showBoundaryNotice('Chọn dự án trước', 'Vui lòng chọn dự án trước khi thêm task.')} title={selected ? 'Thêm task mới' : 'Vui lòng chọn dự án trước'}><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><span>Thêm Task</span></button></div></div>
+       <div className="page-toolbar source-task-toolbar"><div className="toolbar-filters"><select className="form-control filter-select" value={selected ? selected.collection + '/' + selected.id : ''} onChange={event => { const project = projects.find(item => item.collection + '/' + item.id === event.target.value); if (project) void selectProject(project); else clearProjectSelection(); }}><option value="">-- Chọn dự án --</option>{projects.map(project => <option key={project.collection + '/' + project.id} value={project.collection + '/' + project.id}>{project.name}</option>)}</select><select className="form-control filter-select" value={wbsState} onChange={event => setWbsState(event.target.value)}><option value="all">-- Trạng thái --</option>{wbsStates.map(state => <option key={state} value={state}>{state}</option>)}</select><select className="form-control filter-select" value={wbsAssignee} onChange={event => setWbsAssignee(event.target.value)}><option value="all">-- Người thực hiện --</option>{wbsAssignees.map(assignee => <option key={assignee} value={assignee}>{assignee}</option>)}</select><select className="form-control filter-select" value={wbsPriority} onChange={event => setWbsPriority(event.target.value)}><option value="all">-- Độ ưu tiên --</option><option value="1">Thấp</option><option value="2">Trung bình</option><option value="3">Cao</option><option value="4">Khẩn cấp</option></select></div><div className="toolbar-actions"><div className="btn-group view-toggle source-view-toggle" role="group"><input type="radio" className="btn-check" name="projectTaskViewMode" id="projectTaskViewGrid" value="list" checked={progressView === 'list'} onChange={() => setProgressView('list')} /><label className={'btn btn-outline-secondary btn-sm' + (progressView === 'list' ? ' active' : '')} htmlFor="projectTaskViewGrid" title="Danh sách"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg></label><input type="radio" className="btn-check" name="projectTaskViewMode" id="projectTaskViewGantt" value="gantt" checked={progressView === 'gantt'} onChange={() => setProgressView('gantt')} /><label className={'btn btn-outline-secondary btn-sm' + (progressView === 'gantt' ? ' active' : '')} htmlFor="projectTaskViewGantt" title="Gantt Chart"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="4" rx="1" /><rect x="5" y="10" width="12" height="4" rx="1" /><rect x="7" y="16" width="8" height="4" rx="1" /></svg></label><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => showBoundaryNotice('Phân bổ nguồn lực', 'Chức năng này cần nguồn dữ liệu Resource của Jarvis DB và chưa được chuyển sang API mới.')} title="Chờ API Resource của Jarvis DB."><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg></button></div><div className={'pm-tools' + (toolsOpen ? ' open' : '')}><button type="button" className="btn btn-tools" onClick={() => setToolsOpen(value => !value)} title="Công cụ khác"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></svg><span>Công cụ</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="arrow"><polyline points="6 9 12 15 18 9" /></svg></button>{toolsOpen && <div className="pm-tools-menu"><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Đồng bộ dự án', 'Chưa có API ghi đồng bộ TFS vào hệ thống mới. Không có dữ liệu nào được thay đổi.')}><ToolMenuIcon kind="sync" /><span>Đồng bộ dự án đang chọn</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Đường găng', 'Logic đường găng của Jarvis chưa có nguồn dữ liệu tương đương trong hệ thống mới.')}><ToolMenuIcon kind="critical" /><span>Đường găng</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Baseline', 'Chức năng Baseline chưa được chuyển đổi vì chưa có API lưu trữ tương đương.')}><ToolMenuIcon kind="baseline" /><span>Baseline</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Lịch sử', 'Chức năng lịch sử hoạt động cần dữ liệu Jarvis DB và chưa khả dụng trong bản read-only này.')}><ToolMenuIcon kind="history" /><span>Lịch sử</span></button><button type="button" className="btn-tool-item" onClick={() => showBoundaryNotice('Xuất/Nhập', 'Chức năng xuất/nhập task chưa được bật để tránh ghi sai dữ liệu TFS.')}><ToolMenuIcon kind="export" /><span>Xuất/Nhập</span></button><button type="button" className="btn-tool-item" onClick={() => { setToolsOpen(false); if (selected) void loadProjectData('work-items'); }} disabled={!selected || dataLoading !== null}><ToolMenuIcon kind="refresh" /><span>Làm mới</span></button></div>}</div><button type="button" className="source-add-task" onClick={() => selected ? setCreateTaskOpen(true) : showBoundaryNotice('Chọn dự án trước', 'Vui lòng chọn dự án trước khi thêm task.')} title={selected ? 'Thêm task mới' : 'Vui lòng chọn dự án trước'}><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><span>Thêm Task</span></button></div></div>
       {error && <p className="error">{error}</p>}
       {loading && <div className="projectmanagement-state">Đang tải danh sách dự án…</div>}
       {!loading && selected && workItems.length > 0 && <div className="summary-stats source-summary-stats" id="taskStats">
@@ -606,13 +659,15 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
         </div>
       </div>}
        {!loading && <div className="project-tasks-content source-task-surface">{selected && workItems.length > 0 && progressView === 'gantt' ? renderSourceGantt() : renderSourceTaskGrid()}</div>}
-      {renderNoticeModal()}
-    </section>;
+       {renderNoticeModal()}
+       {selected && createTaskOpen && <TfsTaskCreateModal project={selected} workItems={workItems} onClose={() => setCreateTaskOpen(false)} onCreated={item => { setCreateTaskOpen(false); setNotice({ title: 'Đã tạo Task', message: `Work Item #${item.id} đã được tạo trên TFS.` }); void loadProjectData('work-items'); }} />}
+       {renderWorkItemModal()}
+     </section>;
   }
 
   return <section className="projects-page">
     <div className="page-heading">
-      <div><p className="eyebrow">{progressMode ? 'WBS / Gantt migration slice' : 'Quản lý dự án'}</p><h2>{progressMode ? 'Tiến độ dự án' : 'TFS Projects'}</h2><p className="muted">{progressMode ? 'Theo dõi read-only work items theo iteration từ TFS.' : 'Giao diện đọc-only, tổ chức theo sheet tương tự FiinGroup.Jarvis.'}</p></div>
+      <div><p className="eyebrow">{progressMode ? 'WBS / Gantt migration slice' : 'Quản lý dự án'}</p><h2>{progressMode ? 'Tiến độ dự án' : 'Quản lý dự án'}</h2><p className="muted">{progressMode ? 'Theo dõi read-only work items theo iteration từ TFS.' : 'Giao diện đọc-only, tổ chức theo sheet tương tự FiinGroup.Jarvis.'}</p></div>
       <button type="button" onClick={() => void loadProjects()} disabled={loading}>{loading ? 'Đang tải...' : 'Tải lại'}</button>
     </div>
     {progressMode && <div className="project-mode-banner"><strong>Tiến độ dự án — TFS read-only</strong><span>Chọn project bên trái để tải WBS. Các thao tác sửa task, Gantt, baseline và import/export chưa được bật trong giai đoạn này.</span></div>}

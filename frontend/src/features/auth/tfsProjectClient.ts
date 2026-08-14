@@ -10,8 +10,9 @@ export type TfsTeam = { id: string; name: string; description: string | null; ur
 export type TfsIteration = { id: string; name: string; path: string | null; timeFrame: string | null; url: string | null };
 export type TfsWorkItem = { id: number; revision: number; title: string | null; workItemType: string | null; state: string | null; assignedTo: string | null; iterationPath: string | null; parentId: number | null; startDate: string | null; finishDate: string | null; targetDate: string | null; closedDate: string | null; statusCode: number; progress: number; plan: number; priorityCode: number; taskCode: string | null; product: string | null; createdBy: string | null; url: string | null; generatedFields?: Record<string, string> };
 export type TfsWorkItemDetail = TfsWorkItem & { description: string | null; createdDate: string | null; changedDate: string | null; priority: string | null; tags: string | null; history: string | null };
+export type TfsCreateWorkItemRequest = { workItemType?: string; title: string; description?: string; priority?: number; assignedTo?: string; iterationPath?: string; startDate?: string; finishDate?: string; tags?: string; parentId?: number };
 
-type TfsProjectResponse = { data?: TfsProject; error?: { code?: string; message?: string } };
+type TfsProjectResponse<T = TfsProject> = { data?: T; error?: { code?: string; message?: string } };
 
 async function readError(response: Response, fallback: string): Promise<Error> {
   const payload = await response.json().catch(() => ({})) as TfsProjectResponse;
@@ -48,3 +49,17 @@ export const getTfsTeams = (project: TfsProject) => getProjectData<TfsTeam[]>(pr
 export const getTfsIterations = (project: TfsProject) => getProjectData<TfsIteration[]>(project, 'iterations');
 export const getTfsWorkItems = (project: TfsProject, limit = 100, offset = 0) => getProjectData<{ collection: string; projectId: string; totalAvailable: number; items: TfsWorkItem[] }>(project, 'work-items?limit=' + limit + '&offset=' + offset + '&projectName=' + encodeURIComponent(project.name));
 export const getTfsWorkItem = (project: TfsProject, workItemId: number) => getProjectData<TfsWorkItemDetail>(project, 'work-items/' + workItemId);
+
+export async function createTfsWorkItem(project: TfsProject, request: TfsCreateWorkItemRequest): Promise<TfsWorkItemDetail> {
+  const query = new URLSearchParams({ collection: project.collection });
+  const response = await fetch('/api/v2/tfs/projects/' + encodeURIComponent(project.id) + '/work-items?' + query, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) throw await readError(response, 'Unable to create TFS work item.');
+  const payload = await response.json() as TfsProjectResponse<TfsWorkItemDetail>;
+  if (!payload.data) throw new Error('TFS created work item is empty.');
+  return payload.data as TfsWorkItemDetail;
+}

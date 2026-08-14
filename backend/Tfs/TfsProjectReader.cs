@@ -13,6 +13,7 @@ public sealed record TfsTeamSummary(string Id, string Name, string? Description,
 public sealed record TfsIterationSummary(string Id, string Name, string? Path, string? TimeFrame, string? Url);
 public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? StartDate, string? FinishDate, string? TargetDate, string? ClosedDate, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
 public sealed record TfsWorkItemDetail(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? Description, string? CreatedDate, string? ChangedDate, string? StartDate, string? FinishDate, string? TargetDate, string? Priority, string? Tags, string? History, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
+public sealed record TfsCreateWorkItemRequest(string? WorkItemType, string Title, string? Description, int? Priority, string? AssignedTo, string? IterationPath, string? StartDate, string? FinishDate, string? Tags, int? ParentId);
 
 public interface ITfsProjectReader
 {
@@ -22,6 +23,7 @@ public interface ITfsProjectReader
     Task<IReadOnlyList<TfsIterationSummary>> GetIterationsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
     Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collection, string? projectName, int limit, int offset, CancellationToken cancellationToken);
     Task<TfsWorkItemDetail?> GetWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collection, CancellationToken cancellationToken);
+    Task<TfsWorkItemDetail> CreateWorkItemAsync(TfsSessionCredential credential, string projectId, string? collection, TfsCreateWorkItemRequest request, CancellationToken cancellationToken);
 }
 
 public sealed record TfsWorkItemQueryResult(string Collection, string ProjectId, int TotalAvailable, IReadOnlyList<TfsWorkItemSummary> Items);
@@ -117,6 +119,43 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         return item is null ? null : MapWorkItemDetail(item);
     }
 
+    public async Task<TfsWorkItemDetail> CreateWorkItemAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, TfsCreateWorkItemRequest request, CancellationToken cancellationToken)
+    {
+        if (!options.WriteEnabled)
+            throw new TfsProjectException("TFS task creation is disabled.", "TFS_WRITE_DISABLED", StatusCodes.Status403Forbidden);
+        var project = ValidateProjectId(projectId);
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new TfsProjectException("Work item title is required.", "TFS_WORK_ITEM_TITLE_REQUIRED", StatusCodes.Status400BadRequest);
+        var workItemType = ValidateWorkItemType(request.WorkItemType);
+        var operations = new List<object>
+        {
+            new { op = "add", path = "/fields/System.Title", value = request.Title.Trim() }
+        };
+        AddFieldOperation(operations, "/fields/System.Description", request.Description);
+        AddFieldOperation(operations, "/fields/System.AssignedTo", request.AssignedTo);
+        AddFieldOperation(operations, "/fields/System.IterationPath", request.IterationPath);
+        AddFieldOperation(operations, "/fields/Microsoft.VSTS.Scheduling.StartDate", request.StartDate);
+        AddFieldOperation(operations, "/fields/Microsoft.VSTS.Scheduling.FinishDate", request.FinishDate);
+        AddFieldOperation(operations, "/fields/System.Tags", request.Tags);
+        if (request.Priority is >= 1 and <= 4)
+            operations.Add(new { op = "add", path = "/fields/Microsoft.VSTS.Common.Priority", value = request.Priority.Value });
+        if (request.ParentId is > 0)
+        {
+            operations.Add(new
+            {
+                op = "add",
+                path = "/relations/-",
+                value = new { rel = "System.LinkTypes.Hierarchy-Reverse", url = WorkItemUrl(collection, request.ParentId.Value) }
+            });
+        }
+
+        using var client = CreateClient(credential);
+        var response = await SendJsonPatchAsync(client, HttpMethod.Post, collection + "/" + Uri.EscapeDataString(project) + "/_apis/wit/workitems/$" + Uri.EscapeDataString(workItemType) + "?%24expand=all&api-version=1.0", operations, cancellationToken, "work item create");
+        var item = await response.Content.ReadFromJsonAsync<TfsWorkItemDto>(cancellationToken: cancellationToken);
+        return item is null ? throw new TfsProjectException("TFS returned an empty work item response.", "TFS_WORK_ITEM_RESPONSE_EMPTY", StatusCodes.Status502BadGateway) : MapWorkItemDetail(item);
+    }
+
     private async Task<IReadOnlyList<string>> GetCollectionsAsync(HttpClient client, CancellationToken cancellationToken)
     {
         var response = await SendAsync(client, "_apis/connectionData?connectOptions=1&lastChangeId=-1&lastChangeId64=-1", cancellationToken);
@@ -192,6 +231,22 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         if (string.IsNullOrWhiteSpace(projectId)) throw new TfsProjectException("Project id is required.", "TFS_PROJECT_ID_REQUIRED", StatusCodes.Status400BadRequest);
         return projectId.Trim();
     }
+
+    private static string ValidateWorkItemType(string? workItemType)
+    {
+        var value = string.IsNullOrWhiteSpace(workItemType) ? "Task" : workItemType.Trim();
+        if (value.Length > 50 || value.Any(character => !(char.IsLetterOrDigit(character) || character is ' ' or '-' or '_')))
+            throw new TfsProjectException("Work item type is invalid.", "TFS_WORK_ITEM_TYPE_INVALID", StatusCodes.Status400BadRequest);
+        return value;
+    }
+
+    private static void AddFieldOperation(List<object> operations, string path, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value)) operations.Add(new { op = "add", path, value = value.Trim() });
+    }
+
+    private string WorkItemUrl(string collection, int id)
+        => options.BaseUrl!.TrimEnd('/') + "/" + collection + "/_apis/wit/workitems/" + id;
 
     private static TfsProjectSummary Map(string collection, TfsProjectDto project) => new(collection, project.Id ?? string.Empty, project.Name ?? string.Empty, project.Description, project.State, project.Url);
     private static TfsWorkItemSummary MapWorkItem(TfsWorkItemDto item)
@@ -316,6 +371,27 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         }
     }
 
+    private async Task<HttpResponseMessage> SendJsonPatchAsync(HttpClient client, HttpMethod method, string relativeUrl, object body, CancellationToken cancellationToken, string operation)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(method, relativeUrl)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json-patch+json")
+            };
+            return EnsureResponse(await client.SendAsync(request, cancellationToken), operation);
+        }
+        catch (TfsProjectException) { throw; }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TfsProjectException("TFS project request timed out.", "TFS_PROJECTS_TIMEOUT", StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (HttpRequestException)
+        {
+            throw new TfsProjectException("TFS project service is unavailable.", "TFS_PROJECTS_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
     private static HttpResponseMessage EnsureResponse(HttpResponseMessage response, string operation)
     {
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
@@ -324,7 +400,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
             throw new TfsProjectException("TFS " + operation + " endpoint was not found.", "TFS_PROJECTS_ENDPOINT_NOT_FOUND", StatusCodes.Status503ServiceUnavailable);
         if (!response.IsSuccessStatusCode)
         {
-            var code = operation == "WIQL" ? "TFS_WIQL_HTTP_ERROR" : operation == "work item batch" ? "TFS_WORK_ITEMS_HTTP_ERROR" : "TFS_PROJECTS_HTTP_ERROR";
+            var code = operation == "WIQL" ? "TFS_WIQL_HTTP_ERROR" : operation == "work item batch" ? "TFS_WORK_ITEMS_HTTP_ERROR" : operation == "work item create" ? "TFS_WORK_ITEM_CREATE_HTTP_ERROR" : "TFS_PROJECTS_HTTP_ERROR";
             var statusCode = (int)response.StatusCode is >= 400 and < 500
                 ? (int)response.StatusCode
                 : StatusCodes.Status503ServiceUnavailable;

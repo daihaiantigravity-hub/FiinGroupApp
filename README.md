@@ -53,6 +53,10 @@ Pilot users are created explicitly with `backend.IdentityProvisioner`; no creden
 
 For the internal TFS pilot, grant read-only project permissions explicitly with
 `backend.PermissionProvisioner`; see `docs/tfs-permission-provisioning-runbook.md`.
+To test the separately gated TFS Task creation pilot, set
+`$env:Tfs__WriteEnabled = "true"` and provision only the `ADD` action with
+`--allow-add true`. This writes directly to TFS, not the Jarvis database; edit,
+delete and PMBOK persistence remain disabled.
 
 The technical pilot configuration and evidence requirements are documented in `docs/pilot-environment.md`.
 

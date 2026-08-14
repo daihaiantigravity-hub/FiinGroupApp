@@ -8,6 +8,7 @@ namespace FiinGroupApp.Api.Auth;
 public sealed class TfsOptions
 {
     public bool Enabled { get; init; }
+    public bool WriteEnabled { get; init; }
     public string? BaseUrl { get; init; }
     public string Collection { get; init; } = "DefaultCollection";
     public int TimeoutSeconds { get; init; } = 15;

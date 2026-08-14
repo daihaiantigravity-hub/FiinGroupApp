@@ -16,6 +16,7 @@ var identityOptions = new IdentityStoreOptions
 var tfsOptions = new TfsOptions
 {
     Enabled = builder.Configuration.GetValue<bool>("Tfs:Enabled"),
+    WriteEnabled = builder.Configuration.GetValue<bool>("Tfs:WriteEnabled"),
     BaseUrl = builder.Configuration["Tfs:BaseUrl"],
     Collection = builder.Configuration["Tfs:Collection"] ?? "DefaultCollection",
     TimeoutSeconds = builder.Configuration.GetValue("Tfs:TimeoutSeconds", 15),
@@ -253,6 +254,24 @@ app.MapGet("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async
         return workItem is null
             ? Results.NotFound(new { success = false, error = new { code = "TFS_WORK_ITEM_NOT_FOUND", message = "TFS work item was not found." } })
             : Results.Ok(new { success = true, data = workItem });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapPost("/api/v2/tfs/projects/{projectId}/work-items", async (string projectId, TfsCreateWorkItemRequest workItemRequest, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanCreate(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.WriteForbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
+    if (credential is null) return Results.Unauthorized();
+    try
+    {
+        var workItem = await reader.CreateWorkItemAsync(credential, projectId, request.Query["collection"], workItemRequest, cancellationToken);
+        return Results.Created(workItem.Url ?? $"/api/v2/tfs/projects/{projectId}/work-items/{workItem.Id}", new { success = true, data = workItem });
     }
     catch (TfsProjectException exception)
     {

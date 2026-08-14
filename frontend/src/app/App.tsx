@@ -33,10 +33,10 @@ function SourceGroup({ label, icon, entries, expanded, onToggle }: SourceGroupPr
   </section>;
 }
 
-function AppTab({ to, label, close, onClose, onContextMenu }: { to: string; label: string; close?: boolean; onClose?: () => void; onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>) => void }) {
+function AppTab({ to, label, close, onClose, onContextMenu, draggable, onDragStart, onDragOver, onDrop, onDragEnd, onMiddleClick }: { to: string; label: string; close?: boolean; onClose?: () => void; onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>) => void; draggable?: boolean; onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void; onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void; onDrop?: (event: React.DragEvent<HTMLDivElement>) => void; onDragEnd?: () => void; onMiddleClick?: () => void }) {
   const location = useLocation();
   const active = location.pathname === to;
-  return <div className={'app-tab' + (active ? ' active' : '')} role="presentation" onContextMenu={onContextMenu}>
+  return <div className={'app-tab' + (active ? ' active' : '')} role="presentation" draggable={draggable} onContextMenu={onContextMenu} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd} onMouseDown={event => { if (event.button === 1) { event.preventDefault(); onMiddleClick?.(); } }}>
     <NavLink to={to} className="app-tab-link" aria-current={active ? 'page' : undefined}><span>{label}</span></NavLink>
     {close && <button type="button" className="app-tab-close" onClick={onClose} aria-label={`Đóng ${label}`}>×</button>}
   </div>;
@@ -46,7 +46,6 @@ const tabLabels: Record<string, string> = {
   '/dashboard': '⌂ Dashboard',
   '/projectmanagement': 'Quản lý dự án',
   '/project-tasks': 'Tiến độ dự án',
-  '/projects': 'TFS Projects',
   '/wiki': 'Wiki nội bộ',
   '/announcements': 'Thông báo & Tài liệu',
   '/documents': 'Tài liệu',
@@ -56,7 +55,6 @@ const tabLabels: Record<string, string> = {
 function TargetPage({ path }: { path: string }) {
   switch (path) {
     case '/dashboard': return <ProtectedRoute><DashboardPage /></ProtectedRoute>;
-    case '/projects': return <ProtectedRoute><TfsProjectsPage pageKind="browser" /></ProtectedRoute>;
     case '/projectmanagement': return <ProtectedRoute><TfsProjectsPage pageKind="management" /></ProtectedRoute>;
     case '/project-tasks': return <ProtectedRoute><TfsProjectsPage initialSheet="wbs" pageKind="tasks" /></ProtectedRoute>;
     case '/wiki': return <ProtectedRoute><KnowledgePage kind="wiki" /></ProtectedRoute>;
@@ -75,10 +73,12 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.localStorage.getItem('sidebarCollapsed') === 'true');
   const [expandedGroup, setExpandedGroup] = useState('Dự án');
   const tabStorageKey = `jarvis_open_tabs_${auth.user?.id || auth.user?.login || 'anonymous'}`;
+  const activeTabStorageKey = `jarvis_active_tab_${auth.user?.id || auth.user?.login || 'anonymous'}`;
   const [openTabs, setOpenTabs] = useState<string[]>(['/dashboard']);
   const tabBarRef = useRef<HTMLDivElement>(null);
   const [tabScroll, setTabScroll] = useState({ left: false, right: false });
   const [tabContext, setTabContext] = useState<{ path: string; x: number; y: number } | null>(null);
+  const [draggedTab, setDraggedTab] = useState<string | null>(null);
 
   const toggleSidebar = () => setSidebarCollapsed(current => { const next = !current; window.localStorage.setItem('sidebarCollapsed', String(next)); return next; });
   const toggleGroup = (label: string) => setExpandedGroup(current => current === label ? '' : label);
@@ -103,7 +103,8 @@ export default function App() {
       window.localStorage.setItem(tabStorageKey, JSON.stringify(next));
       return next;
     });
-  }, [location.pathname, tabStorageKey]);
+    if (tabLabels[location.pathname]) window.localStorage.setItem(activeTabStorageKey, location.pathname);
+  }, [activeTabStorageKey, location.pathname, tabStorageKey]);
 
   useEffect(() => {
     const node = tabBarRef.current;
@@ -162,6 +163,20 @@ export default function App() {
     closeTabSet([path]);
   };
 
+  const reorderTab = (targetPath: string) => {
+    if (!draggedTab || draggedTab === targetPath || draggedTab === '/dashboard' || targetPath === '/dashboard') return;
+    setOpenTabs(current => {
+      const fromIndex = current.indexOf(draggedTab);
+      const targetIndex = current.indexOf(targetPath);
+      if (fromIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(next.indexOf(targetPath), 0, moved);
+      persistOpenTabs(next);
+      return next;
+    });
+  };
+
   const openTabContextMenu = (path: string, event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     setTabContext({ path, x: event.clientX, y: event.clientY });
@@ -180,14 +195,17 @@ export default function App() {
   };
 
   if (auth.status !== 'authenticated') return <main><LoginPage /></main>;
-  if (!tabLabels[location.pathname]) return <Navigate to="/dashboard" replace />;
+  if (!tabLabels[location.pathname]) {
+    const savedActive = window.localStorage.getItem(activeTabStorageKey);
+    return <Navigate to={location.pathname === '/' && savedActive && tabLabels[savedActive] ? savedActive : '/dashboard'} replace />;
+  }
 
   const displayName = auth.user?.fullName || auth.user?.login || 'User';
   const initials = displayName.trim().split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
 
   const projectEntries: SourceEntry[] = [
     { label: 'Dashboard CEO' }, { label: 'Khách hàng' }, { label: 'Phụ lục/Hợp đồng' }, { label: 'Phân bổ CPBH' },
-    { label: 'Quản lý dự án', to: '/projectmanagement' }, { label: 'Tiến độ dự án', to: '/project-tasks' }, { label: 'TFS Projects', to: '/projects' }, { label: 'Tổng hợp dự án' },
+    { label: 'Quản lý dự án', to: '/projectmanagement' }, { label: 'Tiến độ dự án', to: '/project-tasks' }, { label: 'Tổng hợp dự án' },
     { label: 'PDCA & Đề xuất' }, { label: 'Chi phí dự án' }, { label: 'Danh sách Task Plan' }, { label: 'KPI Doanh thu' },
   ];
 
@@ -208,7 +226,7 @@ export default function App() {
       <div className="app-sidebar-footer"><NavLink className="app-user-mini app-user-profile-link" to="/profile" title="Thông tin cá nhân"><span className="app-avatar">{initials}</span><span className="app-user-details"><strong>{displayName}</strong><small>{auth.user?.positionsName || 'v26050301'}</small></span></NavLink><button type="button" className="app-signout" onClick={() => void auth.logout()} title="Đăng xuất"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg></button></div>
     </aside>
     <div className="app-main-shell">
-      <header className="app-topbar"><button className="app-menu-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu">☰</button><div className="app-tab-strip"><button type="button" className="app-tab-scroll" onClick={() => scrollTabs(-180)} disabled={!tabScroll.left} aria-label="Cuộn tab sang trái">‹</button><div ref={tabBarRef} className="app-tab-bar" role="tablist" aria-label="Các màn hình đang mở">{openTabs.map(path => <AppTab key={path} to={path} label={tabLabels[path]} close={path !== '/dashboard'} onClose={() => closeTab(path)} onContextMenu={event => openTabContextMenu(path, event)} />)}</div><button type="button" className="app-tab-scroll" onClick={() => scrollTabs(180)} disabled={!tabScroll.right} aria-label="Cuộn tab sang phải">›</button></div><div className="app-topbar-actions"><div className="app-global-search"><input aria-label="Tìm kiếm" placeholder="Tìm kiếm" disabled /><span>⌕</span></div><button type="button" className="app-topbar-icon" disabled aria-label="Thông báo">●</button><button type="button" className="app-topbar-icon" disabled aria-label="Cài đặt">⚙</button></div></header>
+      <header className="app-topbar"><button className="app-menu-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Mở menu">☰</button><div className="app-tab-strip"><button type="button" className="app-tab-scroll" onClick={() => scrollTabs(-180)} disabled={!tabScroll.left} aria-label="Cuộn tab sang trái">‹</button><div ref={tabBarRef} className="app-tab-bar" role="tablist" aria-label="Các màn hình đang mở">{openTabs.map(path => <AppTab key={path} to={path} label={tabLabels[path]} close={path !== '/dashboard'} draggable={path !== '/dashboard'} onClose={() => closeTab(path)} onContextMenu={event => openTabContextMenu(path, event)} onMiddleClick={() => closeTab(path)} onDragStart={event => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', path); setDraggedTab(path); }} onDragOver={event => { if (draggedTab && draggedTab !== path && path !== '/dashboard') { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={event => { event.preventDefault(); reorderTab(path); setDraggedTab(null); }} onDragEnd={() => setDraggedTab(null)} />)}</div><button type="button" className="app-tab-scroll" onClick={() => scrollTabs(180)} disabled={!tabScroll.right} aria-label="Cuộn tab sang phải">›</button></div><div className="app-topbar-actions"><div className="app-global-search"><input aria-label="Tìm kiếm" placeholder="Tìm kiếm" disabled /><span>⌕</span></div><button type="button" className="app-topbar-icon" disabled aria-label="Thông báo">●</button><button type="button" className="app-topbar-icon" disabled aria-label="Cài đặt">⚙</button></div></header>
       {tabContext && <div className="app-tab-context-menu" style={{ left: tabContext.x, top: tabContext.y }} role="menu" onMouseDown={event => event.stopPropagation()}>
         <button type="button" role="menuitem" onClick={() => runTabContextAction('close')} disabled={tabContext.path === '/dashboard'}>Đóng tab</button>
         <button type="button" role="menuitem" onClick={() => runTabContextAction('close-left')} disabled={!openTabs.slice(0, openTabs.indexOf(tabContext.path)).some(path => path !== '/dashboard')}>Đóng tab bên trái</button>

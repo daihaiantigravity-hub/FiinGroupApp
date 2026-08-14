@@ -295,6 +295,16 @@ dt { color: #52606d; } dd { margin: 0; font-weight: 600; }
 .work-item-detail-block p { max-height: 10rem; margin: .4rem 0 0; overflow: auto; color: #34495a; font-size: .8rem; line-height: 1.5; white-space: pre-wrap; }
 .work-item-modal-panel footer { align-items: center; padding-top: .75rem; border-top: 1px solid #e4e9ef; }
 .work-item-modal-panel footer a { color: #0e6189; font-size: .8rem; }
+.tfs-create-task-panel { width: min(760px, 100%); max-height: calc(100vh - 2rem); }
+.tfs-create-task-panel footer { align-items: center; flex-wrap: wrap; }
+.tfs-create-task-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; max-height: calc(100vh - 220px); overflow: auto; padding: .1rem .25rem .1rem 0; }
+.tfs-create-task-grid label { display: grid; gap: .3rem; color: #52636f; font-size: .78rem; font-weight: 700; }
+.tfs-create-task-grid input, .tfs-create-task-grid select, .tfs-create-task-grid textarea { width: 100%; border: 1px solid #d6dee7; border-radius: .45rem; padding: .5rem .6rem; color: #1f2a36; background: #fff; font: inherit; font-size: .8rem; }
+.tfs-create-task-grid textarea { min-height: 6rem; resize: vertical; }
+.tfs-create-task-grid input:focus, .tfs-create-task-grid select:focus, .tfs-create-task-grid textarea:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+.tfs-create-task-wide { grid-column: 1 / -1; }
+.tfs-create-task-required { color: #dc2626; }
+.tfs-create-task-error { margin: 0; color: #b42318; font-size: .8rem; }
 .project-api-link { display: inline-block; margin-top: 1rem; color: #0e6189; font-size: .8rem; }
 .break-all { overflow-wrap: anywhere; }
 .project-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
@@ -315,6 +325,7 @@ dt { color: #52606d; } dd { margin: 0; font-weight: 600; }
 @media (max-width: 900px) { .project-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .project-wbs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .work-item-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .tfs-create-task-grid { grid-template-columns: 1fr; } .tfs-create-task-wide { grid-column: auto; } }
 @media (max-width: 800px) { .projects-layout { grid-template-columns: 1fr; } .project-detail { position: static; } }
 @media (max-width: 520px) { .project-summary, .project-overview-grid { grid-template-columns: 1fr; } }
 @media (max-width: 900px) {

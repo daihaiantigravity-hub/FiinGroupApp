@@ -29,6 +29,24 @@ fresh permission snapshot, then test:
 3. Teams and Iterations can load for a selected project.
 4. No create/edit/delete control is enabled.
 
+## Optional TFS task-creation pilot
+
+Only enable this for the internal technical test. It grants ADD to the
+separate TFS_TASK_CREATOR role for the three project forms. It does not grant
+EDIT, DELETE, IMPORT, EXPORT or APPROVE.
+
+```powershell
+dotnet run -- `
+  --connection "Server=127.0.0.1;Port=33306;Database=FiinGroupApp.Identity;User ID=fiingroup_test;Password=<local-secret>" `
+  --confirm-database FiinGroupApp.Identity `
+  --username "technical.user" `
+  --allow-add true
+```
+
+The API must also be started with $env:Tfs__WriteEnabled = "true". The
+Thêm Task form then sends a direct TFS create request. It does not write to
+Jarvis DB. Keep the flag unset or false after testing.
+
 Verification query:
 
 ```sql

@@ -384,6 +384,15 @@
   TFS work items are loaded.
 - No files under `FiinGroup.Jarvis` were changed.
 
+## 2026-08-14 — Source-screen label correction
+
+- Removed the remaining `TFS Projects` wording from the migrated project
+  screens; their visible titles now remain `Quản lý dự án` and `Tiến độ dự án`,
+  matching the Jarvis source navigation.
+- TFS is treated as the read-only data source inside those source screens, not
+  as a new user-facing module.
+- No files under `FiinGroup.Jarvis` were changed.
+
 ## 2026-08-14 — Project task Gantt/list toggle correction
 
 - Replaced the target text-button view switch with the source-equivalent
@@ -470,4 +479,34 @@
 - This exposes collections, projects, Teams, Iterations and Work Items through
   the already-authorized read-only target API; no new endpoint or permission
   bypass was added.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Active-tab restoration checkpoint
+
+- Persisted the active route per authenticated user under the same tab-manager
+  convention as Jarvis.
+- On a root refresh, restored the last valid active target tab; invalid routes
+  still fall back to Dashboard.
+- Verified frontend tests and production build.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Tab manager interaction parity checkpoint
+
+- Added middle-click close and drag-and-drop tab reordering to match the
+  existing Jarvis tab manager behavior.
+- Dashboard remains pinned and cannot be dragged; reordered tabs are persisted
+  per user with the existing open-tab storage.
+- No business data or API contract was changed.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Correction: remove non-source TFS Projects navigation
+
+- Review confirmed that `FiinGroup.Jarvis` does not expose a `TFS Projects`
+  item in its main navigation.
+- Removed the target-only `/projects` route, tab label and sidebar entry from
+  FiinGroupApp. Project data remains available only through the source-aligned
+  `Quản lý dự án` and `Tiến độ dự án` screens.
+- The existing `/api/v2/tfs/projects...` endpoints remain internal data
+  adapters used by those two migrated screens; no new navigation surface is
+  exposed.
 - No files under `FiinGroup.Jarvis` were changed.
