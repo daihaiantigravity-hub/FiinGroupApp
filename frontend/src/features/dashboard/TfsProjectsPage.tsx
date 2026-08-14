@@ -7,10 +7,12 @@ import {
   getTfsWorkItem,
   getTfsWorkItems,
   createTfsWorkItem,
+  updateTfsWorkItem,
   type TfsIteration,
   type TfsProject,
   type TfsTeam,
   type TfsCreateWorkItemRequest,
+  type TfsUpdateWorkItemRequest,
   type TfsWorkItemDetail,
   type TfsWorkItem,
 } from '../auth/tfsProjectClient';
@@ -81,8 +83,8 @@ function ToolMenuIcon({ kind }: { kind: ToolMenuIconKind }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>;
 }
 
-function TfsTaskCreateModal({ project, workItems, onClose, onCreated }: { project: TfsProject; workItems: TfsWorkItem[]; onClose: () => void; onCreated: (item: TfsWorkItemDetail) => void }) {
-  const [form, setForm] = useState<TfsCreateWorkItemRequest>({ workItemType: 'Task', title: '', priority: 2 });
+function TfsTaskCreateModal({ project, workItems, item, onClose, onCreated }: { project: TfsProject; workItems: TfsWorkItem[]; item?: TfsWorkItemDetail; onClose: () => void; onCreated: (item: TfsWorkItemDetail) => void }) {
+  const [form, setForm] = useState<TfsCreateWorkItemRequest>(() => item ? { workItemType: item.workItemType ?? 'Task', title: item.title ?? '', description: item.description ?? '', priority: item.priorityCode || 2, assignedTo: item.assignedTo ?? '', iterationPath: item.iterationPath ?? '', startDate: item.startDate?.slice(0, 10), finishDate: item.finishDate?.slice(0, 10), tags: item.tags ?? '', parentId: item.parentId ?? undefined } : { workItemType: 'Task', title: '', priority: 2 });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const assignees = [...new Set(workItems.map(item => item.assignedTo).filter((value): value is string => Boolean(value)))].sort();
@@ -91,8 +93,10 @@ function TfsTaskCreateModal({ project, workItems, onClose, onCreated }: { projec
     if (!form.title.trim()) { setError('Vui lòng nhập tên công việc.'); return; }
     setSaving(true); setError(null);
     try {
-      const item = await createTfsWorkItem(project, { ...form, title: form.title.trim() });
-      onCreated(item);
+      const saved = item
+        ? await updateTfsWorkItem(project, item.id, { ...form, title: form.title.trim(), revision: item.revision } as TfsUpdateWorkItemRequest)
+        : await createTfsWorkItem(project, { ...form, title: form.title.trim() });
+      onCreated(saved);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Không thể tạo work item trên TFS.');
     } finally { setSaving(false); }
@@ -101,7 +105,7 @@ function TfsTaskCreateModal({ project, workItems, onClose, onCreated }: { projec
   return <div className="work-item-modal" role="dialog" aria-modal="true" aria-labelledby="create-work-item-title">
     <button type="button" className="work-item-modal-backdrop" aria-label="Đóng form tạo task" onClick={onClose} />
     <form className="work-item-modal-panel tfs-create-task-panel" onSubmit={submit}>
-      <header><div><p className="eyebrow">TFS Work Item · {project.name}</p><h3 id="create-work-item-title">Thêm Task mới</h3></div><button type="button" className="work-item-modal-close" onClick={onClose} aria-label="Đóng">×</button></header>
+      <header><div><p className="eyebrow">TFS Work Item · {project.name}</p><h3 id="create-work-item-title">{item ? 'Sửa Task' : 'Thêm Task mới'}</h3></div><button type="button" className="work-item-modal-close" onClick={onClose} aria-label="Đóng">×</button></header>
       <div className="tfs-create-task-grid">
         <label className="tfs-create-task-wide">Tên công việc <span className="required">*</span><input value={form.title} onChange={event => update('title', event.target.value)} autoFocus maxLength={250} /></label>
         <label>Loại Work Item<input value={form.workItemType ?? 'Task'} onChange={event => update('workItemType', event.target.value)} /></label>
@@ -142,6 +146,8 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   const [workItemDetail, setWorkItemDetail] = useState<TfsWorkItemDetail | null>(null);
   const [workItemDetailLoading, setWorkItemDetailLoading] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [editTask, setEditTask] = useState<TfsWorkItemDetail | null>(null);
+  const [deleteTask, setDeleteTask] = useState<TfsWorkItem | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const taskGridRef = useRef<HTMLDivElement>(null);
@@ -156,7 +162,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   const projectRequestRef = useRef(0);
 
   useEffect(() => {
-    if (!toolsOpen && !workItemDetail && !notice) return;
+    if (!toolsOpen && !workItemDetail && !notice && !deleteTask) return;
 
     function handlePointerDown(event: MouseEvent) {
       const target = event.target;
@@ -168,6 +174,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       setToolsOpen(false);
       setWorkItemDetail(null);
       setNotice(null);
+      setDeleteTask(null);
     }
 
     document.addEventListener('mousedown', handlePointerDown);
@@ -176,7 +183,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [notice, toolsOpen, workItemDetail]);
+  }, [deleteTask, notice, toolsOpen, workItemDetail]);
 
   useEffect(() => {
     const node = taskGridRef.current;
@@ -247,6 +254,8 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     setWorkItemDetail(null);
     setWorkItemDetailLoading(false);
     setCreateTaskOpen(false);
+    setEditTask(null);
+    setDeleteTask(null);
     setWbsSearch('');
     setWbsState('all');
     setWbsIteration('all');
@@ -302,6 +311,8 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     setGanttCellWidth(30);
     setWorkItemDetailLoading(false);
     setCreateTaskOpen(false);
+    setEditTask(null);
+    setDeleteTask(null);
     try {
       const projectDetail = await getTfsProject(project);
       if (requestId !== projectRequestRef.current) return;
@@ -411,6 +422,19 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     }
   }
 
+  async function openEditTask(workItemId: number) {
+    if (!selected || workItemDetailLoading) return;
+    setWorkItemDetailLoading(true);
+    setError(null);
+    try {
+      setEditTask(await getTfsWorkItem(selected, workItemId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Không thể tải chi tiết work item.');
+    } finally {
+      setWorkItemDetailLoading(false);
+    }
+  }
+
   function LoadMoreButton() {
     if (workItemOffset >= workItemTotal) return null;
     return <button type="button" className="project-load-more" onClick={() => void loadMoreWorkItems()} disabled={dataLoading !== null}>{dataLoading === 'work-items' ? 'Đang tải...' : `Tải thêm (${workItemTotal - workItemOffset})`}</button>;
@@ -435,7 +459,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     const priorityLabels = ['', 'Thấp', 'Trung bình', 'Cao', 'Khẩn cấp'];
     const emptyText = selected ? (filteredWbsItems.length === 0 ? 'Chưa có task nào' : '') : 'Vui lòng chọn dự án để xem danh sách task';
     const scrollTasks = (amount: number) => taskGridRef.current?.scrollBy({ left: amount, behavior: 'smooth' });
-    return <div className="table-wrapper source-task-grid"><button type="button" className="scroll-btn scroll-btn-left" onClick={() => scrollTasks(-620)} disabled={!taskGridScroll.left} title="Cuộn trái" aria-label="Cuộn trái">‹</button><div ref={taskGridRef} className="table-scroll-x source-task-grid-scroll"><table className="data-table project-tasks-table"><thead><tr><th className="col-sticky-left">STT</th><th>Mã</th><th>Tên công việc</th><th>Sản phẩm</th><th>Người thực hiện</th><th>Bắt đầu</th><th>Kết thúc</th><th>Tiến độ</th><th>Plan</th><th>Trạng thái</th><th>Ưu tiên</th><th>Người tạo</th><th className="col-sticky-right">Thao tác</th></tr></thead><tbody>{emptyText ? <tr><td colSpan={13} className="text-center text-muted py-4">{emptyText}</td></tr> : filteredWbsItems.map((item, index) => { const endDate = item.finishDate || item.targetDate || item.closedDate; const status = item.statusCode >= 0 && item.statusCode < statusLabels.length ? statusLabels[item.statusCode] : (item.state || '—'); const generated = item.generatedFields || {}; return <tr key={item.id}><td className="col-sticky-left text-center">{index + 1}</td><td>{item.taskCode || 'TFS-' + item.id}</td><td><div className="task-name-cell" style={{ paddingLeft: item.parentId ? '1.25rem' : undefined }}><span>{item.parentId ? '↳ ' : ''}{item.title || '(Không có tiêu đề)'}</span></div></td><td>{item.product || '—'}</td><td>{item.assignedTo || '—'}</td><td className="text-center" title={generated.startDate}>{formatTaskDate(item.startDate)}</td><td className="text-center" title={generated.finishDate}>{formatTaskDate(endDate)}</td><td title={generated.progress}><div className="progress-cell"><div className="progress-bar-wrapper"><div className="progress-bar-fill" style={{ width: item.progress + '%' }} /></div><span className="progress-text">{Math.round(item.progress)}%</span></div></td><td title={generated.plan}><div className="progress-cell"><div className="progress-bar-wrapper"><div className="progress-bar-fill" style={{ width: item.plan + '%', background: '#17a2b8' }} /></div><span className="progress-text">{Math.round(item.plan)}%</span></div></td><td><span className={'status-badge status-' + item.statusCode}>{status}</span></td><td><span className={'priority-badge priority-badge-' + item.priorityCode}>{priorityLabels[item.priorityCode] || 'Trung bình'}</span></td><td>{item.createdBy || '—'}</td><td className="col-sticky-right"><button type="button" className="project-work-item-link" onClick={() => void openWorkItem(item.id)}>Xem</button></td></tr>; })}</tbody></table>{workItems.length > 0 && <><small className="muted project-table-note">Hiển thị {filteredWbsItems.length} / {workItemTotal} work items từ TFS. Chưa có thao tác tạo/sửa/xóa.</small><LoadMoreButton /></>}</div><button type="button" className="scroll-btn scroll-btn-right" onClick={() => scrollTasks(620)} disabled={!taskGridScroll.right} title="Cuộn phải" aria-label="Cuộn phải">›</button></div>;
+    return <div className="table-wrapper source-task-grid"><button type="button" className="scroll-btn scroll-btn-left" onClick={() => scrollTasks(-620)} disabled={!taskGridScroll.left} title="Cuộn trái" aria-label="Cuộn trái">‹</button><div ref={taskGridRef} className="table-scroll-x source-task-grid-scroll"><table className="data-table project-tasks-table"><thead><tr><th className="col-sticky-left">STT</th><th>Mã</th><th>Tên công việc</th><th>Sản phẩm</th><th>Người thực hiện</th><th>Bắt đầu</th><th>Kết thúc</th><th>Tiến độ</th><th>Plan</th><th>Trạng thái</th><th>Ưu tiên</th><th>Người tạo</th><th className="col-sticky-right">Thao tác</th></tr></thead><tbody>{emptyText ? <tr><td colSpan={13} className="text-center text-muted py-4">{emptyText}</td></tr> : filteredWbsItems.map((item, index) => { const endDate = item.finishDate || item.targetDate || item.closedDate; const status = item.statusCode >= 0 && item.statusCode < statusLabels.length ? statusLabels[item.statusCode] : (item.state || '—'); const generated = item.generatedFields || {}; return <tr key={item.id}><td className="col-sticky-left text-center">{index + 1}</td><td>{item.taskCode || 'TFS-' + item.id}</td><td><div className="task-name-cell" style={{ paddingLeft: item.parentId ? '1.25rem' : undefined }}><span>{item.parentId ? '↳ ' : ''}{item.title || '(Không có tiêu đề)'}</span></div></td><td>{item.product || '—'}</td><td>{item.assignedTo || '—'}</td><td className="text-center" title={generated.startDate}>{formatTaskDate(item.startDate)}</td><td className="text-center" title={generated.finishDate}>{formatTaskDate(endDate)}</td><td title={generated.progress}><div className="progress-cell"><div className="progress-bar-wrapper"><div className="progress-bar-fill" style={{ width: item.progress + '%' }} /></div><span className="progress-text">{Math.round(item.progress)}%</span></div></td><td title={generated.plan}><div className="progress-cell"><div className="progress-bar-wrapper"><div className="progress-bar-fill" style={{ width: item.plan + '%', background: '#17a2b8' }} /></div><span className="progress-text">{Math.round(item.plan)}%</span></div></td><td><span className={'status-badge status-' + item.statusCode}>{status}</span></td><td><span className={'priority-badge priority-badge-' + item.priorityCode}>{priorityLabels[item.priorityCode] || 'Trung bình'}</span></td><td>{item.createdBy || '—'}</td><td className="col-sticky-right"><button type="button" className="project-work-item-link" onClick={() => void openWorkItem(item.id)}>Xem</button><button type="button" className="project-work-item-action" onClick={() => void openEditTask(item.id)} title="Sửa Task">Sửa</button><button type="button" className="project-work-item-action danger" onClick={() => setDeleteTask(item)} title="Xóa Task">Xóa</button></td></tr>; })}</tbody></table>{workItems.length > 0 && <><small className="muted project-table-note">Hiển thị {filteredWbsItems.length} / {workItemTotal} work items từ TFS. Tạo và sửa có kiểm soát; xóa chưa được bật.</small><LoadMoreButton /></>}</div><button type="button" className="scroll-btn scroll-btn-right" onClick={() => scrollTasks(620)} disabled={!taskGridScroll.right} title="Cuộn phải" aria-label="Cuộn phải">›</button></div>;
   }
 
   function changeSheet(sheet: ProjectSheet) {
@@ -569,6 +593,19 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     </div>;
   }
 
+  function renderDeleteModal() {
+    if (!deleteTask) return null;
+    return <div className="migration-notice-modal" role="dialog" aria-modal="true" aria-labelledby="delete-task-title">
+      <button type="button" className="migration-notice-backdrop" aria-label="Đóng xác nhận xóa" onClick={() => setDeleteTask(null)} />
+      <article className="migration-notice-panel">
+        <header><div><p className="eyebrow">TFS Work Item #{deleteTask.id}</p><h3 id="delete-task-title">Xóa Task</h3></div><button type="button" className="work-item-modal-close" onClick={() => setDeleteTask(null)} aria-label="Đóng">×</button></header>
+        <p>Bạn muốn xóa task “{deleteTask.taskCode || 'TFS-' + deleteTask.id}: {deleteTask.title || '(Không có tiêu đề)'}”?</p>
+        <p className="muted">Thao tác xóa chưa được bật vì source Jarvis còn xóa dữ liệu liên kết trong Jarvis DB. Không có dữ liệu nào được thay đổi.</p>
+        <footer><button type="button" className="btn btn-tools" onClick={() => setDeleteTask(null)}>Không</button><button type="button" className="btn btn-danger" disabled title="Chờ contract xóa đồng bộ TFS và Jarvis DB">Có</button></footer>
+      </article>
+    </div>;
+  }
+
   function renderWorkItemModal() {
     if (!workItemDetail) return null;
     return <div className="work-item-modal" role="dialog" aria-modal="true" aria-labelledby="active-work-item-detail-title">
@@ -660,7 +697,9 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       </div>}
        {!loading && <div className="project-tasks-content source-task-surface">{selected && workItems.length > 0 && progressView === 'gantt' ? renderSourceGantt() : renderSourceTaskGrid()}</div>}
        {renderNoticeModal()}
+       {renderDeleteModal()}
        {selected && createTaskOpen && <TfsTaskCreateModal project={selected} workItems={workItems} onClose={() => setCreateTaskOpen(false)} onCreated={item => { setCreateTaskOpen(false); setNotice({ title: 'Đã tạo Task', message: `Work Item #${item.id} đã được tạo trên TFS.` }); void loadProjectData('work-items'); }} />}
+       {selected && editTask && <TfsTaskCreateModal project={selected} workItems={workItems} item={editTask} onClose={() => setEditTask(null)} onCreated={item => { setEditTask(null); setNotice({ title: 'Đã cập nhật Task', message: `Work Item #${item.id} đã được cập nhật trên TFS.` }); void loadProjectData('work-items'); }} />}
        {renderWorkItemModal()}
      </section>;
   }
@@ -670,7 +709,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       <div><p className="eyebrow">{progressMode ? 'WBS / Gantt migration slice' : 'Quản lý dự án'}</p><h2>{progressMode ? 'Tiến độ dự án' : 'Quản lý dự án'}</h2><p className="muted">{progressMode ? 'Theo dõi read-only work items theo iteration từ TFS.' : 'Giao diện đọc-only, tổ chức theo sheet tương tự FiinGroup.Jarvis.'}</p></div>
       <button type="button" onClick={() => void loadProjects()} disabled={loading}>{loading ? 'Đang tải...' : 'Tải lại'}</button>
     </div>
-    {progressMode && <div className="project-mode-banner"><strong>Tiến độ dự án — TFS read-only</strong><span>Chọn project bên trái để tải WBS. Các thao tác sửa task, Gantt, baseline và import/export chưa được bật trong giai đoạn này.</span></div>}
+    {progressMode && <div className="project-mode-banner"><strong>Tiến độ dự án — TFS</strong><span>Chọn project bên trái để tải WBS. Gantt và sửa Task dùng dữ liệu TFS; baseline, đường găng, import/export và cập nhật tiến độ PMBOK vẫn chờ nguồn Jarvis DB.</span></div>}
     {error && <p className="error">{error}</p>}
     {loading && <LoadingState text="Đang tải danh sách dự án từ TFS..." />}
     {!loading && !projects.length && !error && <EmptyState text="Không có dự án TFS nào có thể đọc." />}

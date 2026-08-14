@@ -15,7 +15,7 @@ public static class TfsAuthorization
         => Results.Json(new
         {
             success = false,
-            error = new { code = "TFS_WRITE_FORBIDDEN", message = "TFS task creation permission is required." }
+            error = new { code = "TFS_WRITE_FORBIDDEN", message = "TFS task write permission is required." }
         }, statusCode: StatusCodes.Status403Forbidden);
 
     public static bool CanRead(AuthenticatedUser authenticatedUser, params string[] formCodes)
@@ -27,4 +27,9 @@ public static class TfsAuthorization
         => formCodes.Any(formCode => authenticatedUser.Permissions.Forms.TryGetValue(formCode, out var permission)
             && permission.CanAccess
             && permission.CanAdd);
+
+    public static bool CanEdit(AuthenticatedUser authenticatedUser, params string[] formCodes)
+        => formCodes.Any(formCode => authenticatedUser.Permissions.Forms.TryGetValue(formCode, out var permission)
+            && permission.CanAccess
+            && permission.CanEdit);
 }

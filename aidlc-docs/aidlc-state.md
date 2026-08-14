@@ -35,9 +35,13 @@
 - Current source inventory refreshed on 2026-08-12; see `inception/reverse-engineering/current-baseline.md`.
 - Authentication target remains behind the comparison/acceptance gate; see `construction/auth-contract-matrix.md`.
 - TFS project-management UI comparison and migration boundary are documented in `construction/tfs-project-management-ui.md`.
+- Jarvis project backend routes, tables and TFS synchronization behavior are documented in `inception/reverse-engineering/jarvis-project-backend-baseline.md`.
+- The target business-database boundary and approval gates are documented in `construction/project-management-data-boundary.md`.
+- The source project-management sheet/API parity matrix is documented in `construction/project-management-route-parity.md`.
 - Wiki and announcements compatibility boundary is documented in `construction/content-compatibility.md`.
 - UI/backend correction decisions are documented in `construction/ui-backend-review-correction.md`.
 - TFS pilot permission provisioning is documented in `docs/tfs-permission-provisioning-runbook.md`.
+- Current blocker: Jarvis business database is not fully accessible; only source-code/migration baseline and approved TFS read projection can be advanced safely.
 
 ### OPERATIONS
 

@@ -1,5 +1,31 @@
 # AI-DLC Audit Log
 
+## 2026-08-14 — Jarvis backend and schema reverse-engineering checkpoint
+
+- Read the trusted Jarvis `project-tasks`, `pm-flow` and TFS synchronization source modules.
+- Read the project/task, relation, audit, baseline, weekly-plan, charter and TFS-mapping migrations.
+- Recorded route responsibilities, table ownership, revision conflict behavior and soft-delete semantics in `inception/reverse-engineering/jarvis-project-backend-baseline.md`.
+- Added `construction/project-management-data-boundary.md` to separate the currently approved TFS read projection from the not-yet-approved Jarvis business database migration.
+- No source files, migrations or runtime data in `FiinGroup.Jarvis` were modified.
+- Further business-database implementation is blocked until a read-only Jarvis DB clone/access and project mapping authority are available.
+
+## 2026-08-14 — Jarvis task-progress workflow checkpoint
+
+- Confirmed from `project-tasks.js` and `tfs-work-item-sync.js` that progress updates derive local status, write task/audit logs and conditionally update TFS work fields.
+- Recorded the exact workflow and the current target gap in the backend baseline and project-management data boundary documents.
+- Did not add a target progress mutation because the required Jarvis business tables and TFS-to-Jarvis mapping are not available.
+
+## 2026-08-14 — Project-management sheet/API parity checkpoint
+
+- Read the source `projectmanagement.js` API calls for overview, charter, stakeholder, resource/RACI, cost, risk, quality, communication and change log.
+- Added the route parity matrix and migration order to `construction/project-management-route-parity.md`.
+- Kept all PMBOK sheets outside the target API because their source data and write permissions are not available.
+
+## 2026-08-14 — TFS write-boundary contract tests
+
+- Added backend tests proving TFS create/update requests fail with `TFS_WRITE_DISABLED` and HTTP 403 before any network call when the feature flag is off.
+- Backend test suite passed: 18 tests; frontend test suite passed: 8 tests.
+
 ## 2026-08-12 — FiinGroupApp initialized
 
 - Created an independent migration repository.

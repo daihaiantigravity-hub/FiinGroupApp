@@ -280,6 +280,9 @@ dt { color: #52606d; } dd { margin: 0; font-weight: 600; }
 .project-table-empty { padding: 1.5rem !important; text-align: center !important; color: #7a8898; }
 .project-work-item-link { padding: 0; border: 0; border-radius: 0; background: transparent; color: #0e6189; font-size: .8rem; font-weight: 700; cursor: pointer; }
 .project-work-item-link:hover { color: #0a4a6b; text-decoration: underline; }
+.project-work-item-action { margin-left: .35rem; padding: 0; border: 0; background: transparent; color: #0e6189; font-size: .75rem; cursor: pointer; }
+.project-work-item-action:hover { color: #0a4a6b; text-decoration: underline; }
+.project-work-item-action.danger { color: #b42318; }
 .project-wbs-item-link { display: block; text-align: left; }
 .work-item-modal { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 1.5rem; }
 .work-item-modal-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; background: #102a4366; }

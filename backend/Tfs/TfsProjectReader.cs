@@ -14,6 +14,7 @@ public sealed record TfsIterationSummary(string Id, string Name, string? Path, s
 public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? StartDate, string? FinishDate, string? TargetDate, string? ClosedDate, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
 public sealed record TfsWorkItemDetail(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? Description, string? CreatedDate, string? ChangedDate, string? StartDate, string? FinishDate, string? TargetDate, string? Priority, string? Tags, string? History, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
 public sealed record TfsCreateWorkItemRequest(string? WorkItemType, string Title, string? Description, int? Priority, string? AssignedTo, string? IterationPath, string? StartDate, string? FinishDate, string? Tags, int? ParentId);
+public sealed record TfsUpdateWorkItemRequest(int Revision, string? Title, string? Description, int? Priority, string? AssignedTo, string? IterationPath, string? StartDate, string? FinishDate, string? Tags, int? ParentId);
 
 public interface ITfsProjectReader
 {
@@ -24,6 +25,7 @@ public interface ITfsProjectReader
     Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collection, string? projectName, int limit, int offset, CancellationToken cancellationToken);
     Task<TfsWorkItemDetail?> GetWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collection, CancellationToken cancellationToken);
     Task<TfsWorkItemDetail> CreateWorkItemAsync(TfsSessionCredential credential, string projectId, string? collection, TfsCreateWorkItemRequest request, CancellationToken cancellationToken);
+    Task<TfsWorkItemDetail> UpdateWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collection, TfsUpdateWorkItemRequest request, CancellationToken cancellationToken);
 }
 
 public sealed record TfsWorkItemQueryResult(string Collection, string ProjectId, int TotalAvailable, IReadOnlyList<TfsWorkItemSummary> Items);
@@ -152,6 +154,37 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
 
         using var client = CreateClient(credential);
         var response = await SendJsonPatchAsync(client, HttpMethod.Post, collection + "/" + Uri.EscapeDataString(project) + "/_apis/wit/workitems/$" + Uri.EscapeDataString(workItemType) + "?%24expand=all&api-version=1.0", operations, cancellationToken, "work item create");
+        var item = await response.Content.ReadFromJsonAsync<TfsWorkItemDto>(cancellationToken: cancellationToken);
+        return item is null ? throw new TfsProjectException("TFS returned an empty work item response.", "TFS_WORK_ITEM_RESPONSE_EMPTY", StatusCodes.Status502BadGateway) : MapWorkItemDetail(item);
+    }
+
+    public async Task<TfsWorkItemDetail> UpdateWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collectionOverride, TfsUpdateWorkItemRequest request, CancellationToken cancellationToken)
+    {
+        if (!options.WriteEnabled)
+            throw new TfsProjectException("TFS task update is disabled.", "TFS_WRITE_DISABLED", StatusCodes.Status403Forbidden);
+        var project = ValidateProjectId(projectId);
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        if (workItemId <= 0 || request.Revision <= 0)
+            throw new TfsProjectException("Work item id and revision are required.", "TFS_WORK_ITEM_REVISION_INVALID", StatusCodes.Status400BadRequest);
+        if (!string.IsNullOrWhiteSpace(request.Title) && request.Title.Trim().Length > 250)
+            throw new TfsProjectException("Work item title is too long.", "TFS_WORK_ITEM_TITLE_INVALID", StatusCodes.Status400BadRequest);
+        var operations = new List<object>();
+        AddFieldOperation(operations, "/fields/System.Title", request.Title);
+        AddFieldOperation(operations, "/fields/System.Description", request.Description);
+        AddFieldOperation(operations, "/fields/System.AssignedTo", request.AssignedTo);
+        AddFieldOperation(operations, "/fields/System.IterationPath", request.IterationPath);
+        AddFieldOperation(operations, "/fields/Microsoft.VSTS.Scheduling.StartDate", request.StartDate);
+        AddFieldOperation(operations, "/fields/Microsoft.VSTS.Scheduling.FinishDate", request.FinishDate);
+        AddFieldOperation(operations, "/fields/System.Tags", request.Tags);
+        if (request.Priority is >= 1 and <= 4)
+            operations.Add(new { op = "replace", path = "/fields/Microsoft.VSTS.Common.Priority", value = request.Priority.Value });
+        if (request.ParentId is > 0)
+            operations.Add(new { op = "add", path = "/relations/-", value = new { rel = "System.LinkTypes.Hierarchy-Reverse", url = WorkItemUrl(collection, request.ParentId.Value) } });
+        if (operations.Count == 0)
+            throw new TfsProjectException("At least one work item field is required.", "TFS_WORK_ITEM_UPDATE_EMPTY", StatusCodes.Status400BadRequest);
+
+        using var client = CreateClient(credential);
+        var response = await SendJsonPatchAsync(client, HttpMethod.Patch, collection + "/_apis/wit/workitems/" + workItemId + "?%24expand=all&api-version=1.0", operations, cancellationToken, "work item update", request.Revision.ToString());
         var item = await response.Content.ReadFromJsonAsync<TfsWorkItemDto>(cancellationToken: cancellationToken);
         return item is null ? throw new TfsProjectException("TFS returned an empty work item response.", "TFS_WORK_ITEM_RESPONSE_EMPTY", StatusCodes.Status502BadGateway) : MapWorkItemDetail(item);
     }
@@ -371,7 +404,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         }
     }
 
-    private async Task<HttpResponseMessage> SendJsonPatchAsync(HttpClient client, HttpMethod method, string relativeUrl, object body, CancellationToken cancellationToken, string operation)
+    private async Task<HttpResponseMessage> SendJsonPatchAsync(HttpClient client, HttpMethod method, string relativeUrl, object body, CancellationToken cancellationToken, string operation, string? ifMatch = null)
     {
         try
         {
@@ -379,6 +412,8 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
             {
                 Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json-patch+json")
             };
+            if (!string.IsNullOrWhiteSpace(ifMatch))
+                request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
             return EnsureResponse(await client.SendAsync(request, cancellationToken), operation);
         }
         catch (TfsProjectException) { throw; }

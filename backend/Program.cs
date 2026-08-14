@@ -278,6 +278,24 @@ app.MapPost("/api/v2/tfs/projects/{projectId}/work-items", async (string project
         return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
     }
 });
+app.MapPut("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async (string projectId, int workItemId, TfsUpdateWorkItemRequest workItemRequest, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanEdit(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.WriteForbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
+    if (credential is null) return Results.Unauthorized();
+    try
+    {
+        var workItem = await reader.UpdateWorkItemAsync(credential, projectId, workItemId, request.Query["collection"], workItemRequest, cancellationToken);
+        return Results.Ok(new { success = true, data = workItem });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
 app.MapGet("/api/v2/dashboard/stats", async (HttpRequest request, ITargetSessionStore sessions, IDashboardStatsReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];

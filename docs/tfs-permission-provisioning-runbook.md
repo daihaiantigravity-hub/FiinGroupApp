@@ -47,6 +47,20 @@ The API must also be started with $env:Tfs__WriteEnabled = "true". The
 Thêm Task form then sends a direct TFS create request. It does not write to
 Jarvis DB. Keep the flag unset or false after testing.
 
+To test the source-like Sửa Task flow separately, provision EDIT explicitly:
+
+```powershell
+dotnet run -- `
+  --connection "Server=127.0.0.1;Port=33306;Database=FiinGroupApp.Identity;User ID=fiingroup_test;Password=<local-secret>" `
+  --confirm-database FiinGroupApp.Identity `
+  --username "technical.user" `
+  --allow-edit true
+```
+
+The update uses the TFS revision returned by the detail endpoint. A stale
+revision is rejected by TFS instead of silently overwriting another user's
+change. Delete remains disabled.
+
 Verification query:
 
 ```sql

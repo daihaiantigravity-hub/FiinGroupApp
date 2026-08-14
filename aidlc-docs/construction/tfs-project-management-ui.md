@@ -154,3 +154,8 @@ The permission provisioner grants this only when called with --allow-add true;
 the default remains ACCESS, VIEW only. Update, delete, progress, baseline,
 dependency and PMBOK persistence remain disabled until their source contracts
 and data stores are approved.
+
+The source-like Sửa Task and Xóa Task controls are visible in the task grid,
+but currently open an explicit boundary notice and do not send a mutation.
+
+Sửa Task is now a separately gated direct-TFS update using a revision guard. Xóa Task remains disabled and opens an explicit boundary notice.

@@ -4,7 +4,7 @@ var options = ParseArgs(args);
 var required = new[] { "connection", "confirm-database", "username" };
 if (required.Any(key => !options.ContainsKey(key)) || options.GetValueOrDefault("confirm-database") != "FiinGroupApp.Identity")
 {
-    Console.Error.WriteLine("Usage: dotnet run -- --connection <connection-string> --confirm-database FiinGroupApp.Identity --username <target-user> [--allow-add true]");
+    Console.Error.WriteLine("Usage: dotnet run -- --connection <connection-string> --confirm-database FiinGroupApp.Identity --username <target-user> [--allow-add true] [--allow-edit true]");
     return 2;
 }
 
@@ -39,14 +39,15 @@ if (userId is null)
 }
 
 var allowAdd = string.Equals(options.GetValueOrDefault("allow-add"), "true", StringComparison.OrdinalIgnoreCase);
-var roleId = await EnsureRoleAsync(connection, allowAdd);
+var allowEdit = string.Equals(options.GetValueOrDefault("allow-edit"), "true", StringComparison.OrdinalIgnoreCase);
+var roleId = await EnsureRoleAsync(connection, allowAdd, allowEdit);
 foreach (var formCode in new[] { "pm-projects", "projectmanagement", "project-tasks" })
-    await EnsurePermissionAsync(connection, roleId, formCode, allowAdd);
+    await EnsurePermissionAsync(connection, roleId, formCode, allowAdd, allowEdit);
 await EnsureUserRoleAsync(connection, userId.Value, roleId);
 
 Console.WriteLine($"Granted TFS project permissions to: {username}");
-Console.WriteLine(allowAdd
-    ? "Granted actions: ACCESS, VIEW, ADD. EDIT, DELETE, IMPORT, EXPORT and APPROVE remain disabled."
+Console.WriteLine(allowAdd || allowEdit
+    ? $"Granted actions: ACCESS, VIEW{(allowAdd ? ", ADD" : string.Empty)}{(allowEdit ? ", EDIT" : string.Empty)}. DELETE, IMPORT, EXPORT and APPROVE remain disabled."
     : "Granted actions: ACCESS, VIEW only. No ADD, EDIT, DELETE, IMPORT, EXPORT or APPROVE permission was granted.");
 return 0;
 
@@ -58,9 +59,9 @@ static async Task<Guid?> FindUserIdAsync(MySqlConnection connection, string user
     return value is null || value is DBNull ? null : value is Guid guid ? guid : Guid.Parse(Convert.ToString(value)!);
 }
 
-static async Task<Guid> EnsureRoleAsync(MySqlConnection connection, bool allowAdd)
+static async Task<Guid> EnsureRoleAsync(MySqlConnection connection, bool allowAdd, bool allowEdit)
 {
-    var code = allowAdd ? "TFS_TASK_CREATOR" : "TFS_READONLY";
+    var code = allowAdd && allowEdit ? "TFS_TASK_EDITOR" : allowAdd ? "TFS_TASK_CREATOR" : allowEdit ? "TFS_TASK_EDITOR" : "TFS_READONLY";
     await using var find = new MySqlCommand("SELECT id FROM app_roles WHERE code = @code LIMIT 1", connection);
     find.Parameters.AddWithValue("@code", code);
     var existing = await find.ExecuteScalarAsync();
@@ -70,14 +71,17 @@ static async Task<Guid> EnsureRoleAsync(MySqlConnection connection, bool allowAd
     await using var insert = new MySqlCommand("INSERT INTO app_roles (id, code, name) VALUES (@id, @code, @name)", connection);
     insert.Parameters.AddWithValue("@id", id);
     insert.Parameters.AddWithValue("@code", code);
-    insert.Parameters.AddWithValue("@name", allowAdd ? "TFS task creator" : "TFS read-only project access");
+    insert.Parameters.AddWithValue("@name", allowAdd || allowEdit ? "TFS task editor" : "TFS read-only project access");
     await insert.ExecuteNonQueryAsync();
     return id;
 }
 
-static async Task EnsurePermissionAsync(MySqlConnection connection, Guid roleId, string formCode, bool allowAdd)
+static async Task EnsurePermissionAsync(MySqlConnection connection, Guid roleId, string formCode, bool allowAdd, bool allowEdit)
 {
-    foreach (var action in allowAdd ? new[] { "ACCESS", "VIEW", "ADD" } : new[] { "ACCESS", "VIEW" })
+    var actions = new List<string> { "ACCESS", "VIEW" };
+    if (allowAdd) actions.Add("ADD");
+    if (allowEdit) actions.Add("EDIT");
+    foreach (var action in actions)
     {
         await using var find = new MySqlCommand("SELECT id FROM app_permissions WHERE resource_code = @resource AND action_code = @action LIMIT 1", connection);
         find.Parameters.AddWithValue("@resource", formCode);

@@ -11,6 +11,7 @@ export type TfsIteration = { id: string; name: string; path: string | null; time
 export type TfsWorkItem = { id: number; revision: number; title: string | null; workItemType: string | null; state: string | null; assignedTo: string | null; iterationPath: string | null; parentId: number | null; startDate: string | null; finishDate: string | null; targetDate: string | null; closedDate: string | null; statusCode: number; progress: number; plan: number; priorityCode: number; taskCode: string | null; product: string | null; createdBy: string | null; url: string | null; generatedFields?: Record<string, string> };
 export type TfsWorkItemDetail = TfsWorkItem & { description: string | null; createdDate: string | null; changedDate: string | null; priority: string | null; tags: string | null; history: string | null };
 export type TfsCreateWorkItemRequest = { workItemType?: string; title: string; description?: string; priority?: number; assignedTo?: string; iterationPath?: string; startDate?: string; finishDate?: string; tags?: string; parentId?: number };
+export type TfsUpdateWorkItemRequest = TfsCreateWorkItemRequest & { revision: number };
 
 type TfsProjectResponse<T = TfsProject> = { data?: T; error?: { code?: string; message?: string } };
 
@@ -62,4 +63,18 @@ export async function createTfsWorkItem(project: TfsProject, request: TfsCreateW
   const payload = await response.json() as TfsProjectResponse<TfsWorkItemDetail>;
   if (!payload.data) throw new Error('TFS created work item is empty.');
   return payload.data as TfsWorkItemDetail;
+}
+
+export async function updateTfsWorkItem(project: TfsProject, workItemId: number, request: TfsUpdateWorkItemRequest): Promise<TfsWorkItemDetail> {
+  const query = new URLSearchParams({ collection: project.collection });
+  const response = await fetch('/api/v2/tfs/projects/' + encodeURIComponent(project.id) + '/work-items/' + workItemId + '?' + query, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) throw await readError(response, 'Unable to update TFS work item.');
+  const payload = await response.json() as TfsProjectResponse<TfsWorkItemDetail>;
+  if (!payload.data) throw new Error('TFS updated work item is empty.');
+  return payload.data;
 }

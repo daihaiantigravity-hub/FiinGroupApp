@@ -67,6 +67,22 @@ public sealed class TfsAuthorizationTests
     }
 
     [Fact]
+    public void Allows_edit_only_when_edit_is_granted()
+    {
+        var permissions = new PermissionSet(
+            new Dictionary<string, PermissionFlags>
+            {
+                ["project-tasks"] = new(true, true, false, true, false, false, false, false, false, false)
+            },
+            new HashSet<string>());
+        var user = new AuthenticatedUser(
+            new UserProfile(Guid.NewGuid(), "alice", "Alice", null, []),
+            permissions);
+
+        Assert.True(TfsAuthorization.CanEdit(user, "project-tasks"));
+    }
+
+    [Fact]
     public async Task Invalid_tfs_base_url_is_rejected_before_network_call()
     {
         var reader = new TfsProjectReader(new TfsOptions { Enabled = true, BaseUrl = "not-a-url" });
@@ -77,5 +93,48 @@ public sealed class TfsAuthorizationTests
 
         Assert.Equal("TFS_URL_INVALID", exception.Code);
         Assert.Equal(503, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_is_rejected_before_network_call_when_tfs_writes_are_disabled()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            WriteEnabled = false
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.CreateWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            "Collection",
+            new TfsCreateWorkItemRequest("Task", "New task", null, null, null, null, null, null, null, null),
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WRITE_DISABLED", exception.Code);
+        Assert.Equal(403, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_is_rejected_before_network_call_when_tfs_writes_are_disabled()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            WriteEnabled = false
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.UpdateWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            42,
+            "Collection",
+            new TfsUpdateWorkItemRequest(1, "Updated task", null, null, null, null, null, null, null, null),
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WRITE_DISABLED", exception.Code);
+        Assert.Equal(403, exception.StatusCode);
     }
 }
