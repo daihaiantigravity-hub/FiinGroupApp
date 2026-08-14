@@ -1,0 +1,13 @@
+{
+  "database": "FiinGroupApp.ProjectManagement",
+  "format": 1,
+  "migrations": [
+    {
+      "id": "003_project_management_core",
+      "file": "../Migrations/003_project_management_core.sql",
+      "sha256": "22D70E8EEDF5DDBB89A32993D07168543183D891757F36A3DDC18807DAE57CD1",
+      "destructive": false,
+      "requiresApproval": true
+    }
+  ]
+}

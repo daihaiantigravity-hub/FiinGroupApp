@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using MySqlConnector;
 
-const string usage = "Usage: dotnet run -- --connection <connection-string> --confirm-database FiinGroupApp.Identity [--manifest <path>]";
+const string usage = "Usage: dotnet run -- --connection <connection-string> --confirm-database <FiinGroupApp.Identity|FiinGroupApp.ProjectManagement> [--manifest <path>]";
 var argsMap = ParseArgs(args);
 if (!argsMap.TryGetValue("connection", out var connectionString) || !argsMap.TryGetValue("confirm-database", out var confirmation))
 {
@@ -12,17 +12,18 @@ if (!argsMap.TryGetValue("connection", out var connectionString) || !argsMap.Try
 }
 
 var builder = new MySqlConnectionStringBuilder(connectionString);
-if (!string.Equals(builder.Database, "FiinGroupApp.Identity", StringComparison.OrdinalIgnoreCase) || !string.Equals(confirmation, "FiinGroupApp.Identity", StringComparison.Ordinal))
+var allowedDatabases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FiinGroupApp.Identity", "FiinGroupApp.ProjectManagement" };
+if (!allowedDatabases.Contains(builder.Database) || !string.Equals(builder.Database, confirmation, StringComparison.OrdinalIgnoreCase))
 {
-    Console.Error.WriteLine("Refusing to run: target database must be explicitly confirmed as FiinGroupApp.Identity.");
+    Console.Error.WriteLine("Refusing to run: target database must be explicitly confirmed as an allowed FiinGroupApp database.");
     return 3;
 }
 
 var manifestPath = argsMap.GetValueOrDefault("manifest") ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "backend", "Database", "Migrations", "migrations.json"));
 if (!File.Exists(manifestPath)) { Console.Error.WriteLine($"Manifest not found: {manifestPath}"); return 4; }
 var manifest = JsonSerializer.Deserialize<MigrationManifest>(await File.ReadAllTextAsync(manifestPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-if (manifest is null || !string.Equals(manifest.Database, "FiinGroupApp.Identity", StringComparison.OrdinalIgnoreCase) || manifest.Migrations is null || manifest.Migrations.Length == 0)
-    throw new InvalidOperationException("Invalid migration manifest: expected database FiinGroupApp.Identity and a non-empty migrations list.");
+if (manifest is null || !allowedDatabases.Contains(manifest.Database) || !string.Equals(manifest.Database, builder.Database, StringComparison.OrdinalIgnoreCase) || manifest.Migrations is null || manifest.Migrations.Length == 0)
+    throw new InvalidOperationException("Invalid migration manifest: database must match the explicitly confirmed FiinGroupApp database and contain migrations.");
 
 await using var connection = new MySqlConnection(connectionString);
 await connection.OpenAsync();

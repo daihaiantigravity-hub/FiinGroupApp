@@ -2,7 +2,9 @@
 
 ## Quyết định hiện tại
 
-`FiinGroupApp` tiếp tục dùng TFS làm nguồn đọc cho phần dữ liệu đã được phê duyệt. Không tạo migration business database trong batch này vì database nghiệp vụ Jarvis chưa có quyền đọc đầy đủ và chưa có quyết định chính thức về ownership/mapping.
+`FiinGroupApp` tiếp tục dùng TFS làm nguồn đọc cho phần dữ liệu đã được phê duyệt. Target đã có migration schema riêng cho business store PM cốt lõi, nhưng migration chưa được chạy tự động và chưa được nạp dữ liệu/mapping từ Jarvis.
+
+Runbook: `docs/project-management-migration-runbook.md`.
 
 ## Mapping source-to-target
 
@@ -53,3 +55,10 @@ Khi các điều kiện trên được đáp ứng, thứ tự đối chiếu l�
 6. comments/attachments/weekly summaries.
 
 Mỗi bước phải có source query snapshot, DTO mapping, API contract, test dữ liệu null/quyền hạn/xung đột và rollback note trước khi code.
+
+## Target PM read contract — 2026-08-14
+
+Target đã có schema/repository read contract ban đầu cho `pm_project` và
+`pm_project_task`; contract này chỉ hoạt động khi `ProjectManagement:Enabled=true`
+và có connection string riêng. Nó chưa được nối vào TFS project selector vì
+`pm_project.id_project` chưa được phê duyệt là mapping với TFS project GUID.

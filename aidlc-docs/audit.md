@@ -576,3 +576,32 @@
 - Đã lập migration map theo batch trong `docs/full-migration-map.md`.
 - Xác nhận các batch PMBOK, HR, salary/accounting, chatbot và workers cần
   business database/external contract; không tạo UI hoặc backend giả để thay thế.
+## 2026-08-14 — Business database connectivity gate
+
+- Đã kiểm tra read-only TCP từ môi trường hiện tại: `127.0.0.1:3307` và
+  `127.0.0.1:3306` đều không kết nối được.
+- Không truy cập hoặc thử credential vào database Jarvis khi tunnel/database
+  chưa sẵn sàng.
+- Tiến trình FiinGroupApp API vẫn đang chạy và giữ backend DLL; không tự ý dừng
+  tiến trình của người dùng.
+- Các batch business UI/backend tiếp theo chờ database clone/read-only và môi
+  trường build được giải phóng.
+## 2026-08-14 — Project-management schema migration checkpoint
+
+- Thêm migration target-only `003_project_management_core` dựa trên schema
+  Jarvis cho project, WBS, assignee, dependency, log, weekly plan và summary.
+- Tách manifest khỏi Identity DB; migrator chỉ cho phép hai database target đã
+  allow-list và bắt buộc `--confirm-database` phải khớp connection database.
+- Không seed dữ liệu, không copy `006_restore_pm_project_data.sql`, không tạo
+  mapping TFS/Jarvis và không chạy migration lúc API startup.
+- Runbook được ghi tại `docs/project-management-migration-runbook.md`.
+## 2026-08-14 — Project-management .NET read contract checkpoint
+
+- Thêm `ProjectManagementOptions`, DTO và `MySqlProjectManagementReader` cho
+  read contract project/task dựa trên schema Jarvis.
+- Thêm hai endpoint `/api/v2/project-management/projects` và
+  `/api/v2/project-management/projects/{id}/tasks` với permission read và error
+  envelope riêng.
+- Mặc định business store bị tắt; không có connection string thì không mở DB.
+- Chưa nối UI/TFS selector vì mapping `pm_project.id_project` ↔ TFS GUID chưa
+  được phê duyệt.

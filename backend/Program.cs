@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using FiinGroupApp.Api.Auth;
 using FiinGroupApp.Api.Database;
 using FiinGroupApp.Api.Dashboard;
+using FiinGroupApp.Api.ProjectManagement;
 using FiinGroupApp.Api.Tfs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -33,6 +34,11 @@ var dashboardOptions = new DashboardOptions
     LegacyStatsEnabled = builder.Configuration.GetValue<bool>("Dashboard:LegacyStatsEnabled"),
     ConnectionString = builder.Configuration.GetConnectionString("LegacyOperational")
 };
+var projectManagementOptions = new ProjectManagementOptions
+{
+    Enabled = builder.Configuration.GetValue<bool>("ProjectManagement:Enabled"),
+    ConnectionString = builder.Configuration.GetConnectionString("ProjectManagement")
+};
 if (dashboardOptions.LegacyStatsEnabled && string.IsNullOrWhiteSpace(dashboardOptions.ConnectionString))
     throw new InvalidOperationException("Dashboard:LegacyStatsEnabled is true but ConnectionStrings:LegacyOperational is not configured.");
 if (identityOptions.Enabled && string.IsNullOrWhiteSpace(identityOptions.ConnectionString))
@@ -51,6 +57,7 @@ builder.Services.AddSingleton<ITfsAuthenticationService>(new TfsAuthenticationSe
 builder.Services.AddSingleton<ITfsProjectReader>(new TfsProjectReader(tfsOptions));
 builder.Services.AddSingleton<ITargetSessionStore>(new InMemoryTargetSessionStore(sessionOptions));
 builder.Services.AddSingleton<IDashboardStatsReader>(new MySqlDashboardStatsReader(dashboardOptions));
+builder.Services.AddSingleton<IProjectManagementReader>(new MySqlProjectManagementReader(projectManagementOptions));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"])
@@ -310,6 +317,38 @@ app.MapPut("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async
         return Results.Ok(new { success = true, data = workItem });
     }
     catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/project-management/projects", async (HttpRequest request, ITargetSessionStore sessions, IProjectManagementReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    try
+    {
+        var projects = await reader.GetProjectsAsync(cancellationToken);
+        return Results.Ok(new { success = true, data = projects });
+    }
+    catch (ProjectManagementStoreException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/project-management/projects/{projectId:int}/tasks", async (int projectId, HttpRequest request, ITargetSessionStore sessions, IProjectManagementReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.Forbidden();
+    try
+    {
+        var tasks = await reader.GetTasksAsync(projectId, cancellationToken);
+        return Results.Ok(new { success = true, data = tasks });
+    }
+    catch (ProjectManagementStoreException exception)
     {
         return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
     }
