@@ -554,3 +554,25 @@
   synthetic để kiểm thử cấu trúc project/WBS/assignee/dependency.
 - Fixture không được API tự động chạy, không chứa identity/credential và không mở
   thêm quyền ghi business data.
+## 2026-08-14 — TFS detail modal wording correction
+
+- Sửa nhãn ở popup chi tiết work item để không còn khẳng định toàn bộ màn hình là
+  read-only trong khi create/edit TFS đang được feature-flag và permission-gate.
+- Không thay đổi API, schema hoặc logic business; xóa/progress/baseline và các
+  thao tác cần Jarvis DB vẫn giữ nguyên boundary.
+
+## 2026-08-14 — TFS validation test checkpoint
+
+- Bổ sung test cho work-item detail ID không hợp lệ, revision không hợp lệ và
+  update rỗng; các trường hợp này phải bị chặn trước network call.
+- Frontend build/test vẫn đạt ở checkpoint này.
+- Backend test chưa thể xác nhận: binary `--no-build` là binary cũ gây
+  `TypeLoadException`, còn build/test output riêng bị treo quá timeout trong khi
+  tiến trình API đang chạy. Không dừng tiến trình API của người dùng.
+## 2026-08-14 — Full migration inventory checkpoint
+
+- Đã kiểm kê source Jarvis: khoảng 88 HTML, 353 JavaScript, 81 CSS, 106 SQL và
+  hàng chục Express route.
+- Đã lập migration map theo batch trong `docs/full-migration-map.md`.
+- Xác nhận các batch PMBOK, HR, salary/accounting, chatbot và workers cần
+  business database/external contract; không tạo UI hoặc backend giả để thay thế.

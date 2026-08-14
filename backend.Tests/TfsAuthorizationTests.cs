@@ -137,4 +137,68 @@ public sealed class TfsAuthorizationTests
         Assert.Equal("TFS_WRITE_DISABLED", exception.Code);
         Assert.Equal(403, exception.StatusCode);
     }
+
+    [Fact]
+    public async Task Work_item_detail_rejects_non_positive_id_before_network_call()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080"
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.GetWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            0,
+            "Collection",
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WORK_ITEM_ID_INVALID", exception.Code);
+        Assert.Equal(400, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task Work_item_update_rejects_invalid_revision_before_network_call()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            WriteEnabled = true
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.UpdateWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            42,
+            "Collection",
+            new TfsUpdateWorkItemRequest(0, "Updated task", null, null, null, null, null, null, null, null),
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WORK_ITEM_REVISION_INVALID", exception.Code);
+        Assert.Equal(400, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task Work_item_update_rejects_empty_patch_before_network_call()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            WriteEnabled = true
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.UpdateWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            42,
+            "Collection",
+            new TfsUpdateWorkItemRequest(1, null, null, null, null, null, null, null, null, null),
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WORK_ITEM_UPDATE_EMPTY", exception.Code);
+        Assert.Equal(400, exception.StatusCode);
+    }
 }
