@@ -53,6 +53,7 @@ if (identityOptions.Enabled)
 else
     builder.Services.AddSingleton<IUserStore>(sp => new DevelopmentUserStore(builder.Configuration, sp.GetRequiredService<IPasswordHasher>(), builder.Environment.IsDevelopment()));
 builder.Services.AddHealthChecks().AddCheck("identity-store", new IdentityStoreHealthCheck(identityOptions.ConnectionString, identityOptions.Enabled));
+builder.Services.AddHealthChecks().AddCheck("project-management-store", new ProjectManagementHealthCheck(projectManagementOptions));
 builder.Services.AddSingleton<ITfsAuthenticationService>(new TfsAuthenticationService(tfsOptions));
 builder.Services.AddSingleton<ITfsProjectReader>(new TfsProjectReader(tfsOptions));
 builder.Services.AddSingleton<ITargetSessionStore>(new InMemoryTargetSessionStore(sessionOptions));

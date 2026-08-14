@@ -605,3 +605,14 @@
 - Mặc định business store bị tắt; không có connection string thì không mở DB.
 - Chưa nối UI/TFS selector vì mapping `pm_project.id_project` ↔ TFS GUID chưa
   được phê duyệt.
+## 2026-08-14 — Project-management React client checkpoint
+
+- Thêm typed client React cho hai API PM business read contract.
+- Thêm test kiểm tra URL, credentials cookie và giữ nguyên error code từ backend.
+- Chưa gắn client vào TFS UI vì chưa có mapping được phê duyệt giữa PM project
+  numeric ID và TFS project GUID.
+## 2026-08-14 — Project-management health checkpoint
+
+- Thêm health check `project-management-store` cho database PM riêng.
+- Khi tắt, health check không mở database; khi bật, kiểm tra connection bằng
+  query an toàn `SELECT 1` và không ghi log connection string.
