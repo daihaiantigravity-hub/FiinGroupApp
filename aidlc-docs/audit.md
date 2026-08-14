@@ -1,5 +1,12 @@
 # AI-DLC Audit Log
 
+## 2026-08-14 — TFS Work Item Type discovery checkpoint
+
+- Added read-only `GET /api/v2/tfs/projects/{projectId}/work-item-types` based on the source Jarvis TFS client contract.
+- The create/edit task modal now loads available Work Item Types from the selected TFS project instead of assuming `Task` is always available.
+- The backend still validates the effective TFS type during creation; no Jarvis DB dependency or mutation was added by this slice.
+- Frontend production build passed with the Node 20 toolchain. Backend verification is pending while the active API/build processes hold the workspace.
+
 ## 2026-08-14 — Jarvis backend and schema reverse-engineering checkpoint
 
 - Read the trusted Jarvis `project-tasks`, `pm-flow` and TFS synchronization source modules.
@@ -536,3 +543,14 @@
   adapters used by those two migrated screens; no new navigation surface is
   exposed.
 - No files under `FiinGroup.Jarvis` were changed.
+## 2026-08-14 — Jarvis PM schema and local fixture checkpoint
+
+- Đã đối chiếu schema source cho `pm_project`, `pm_project_task`,
+  `pm_task_assignee`, `pm_task_dependency`, `pm_task_log`, `pm_task_plan` và
+  `pm_project_summary` từ migrations Jarvis.
+- Đã xác nhận bootstrap SQL của Jarvis là fixture TEST/DEVELOPMENT; file restore
+  project chứa dữ liệu nghiệp vụ tĩnh và không được copy vào target.
+- Thêm `docs/project-management-fixture.md` và SQL fixture local-only với dữ liệu
+  synthetic để kiểm thử cấu trúc project/WBS/assignee/dependency.
+- Fixture không được API tự động chạy, không chứa identity/credential và không mở
+  thêm quyền ghi business data.

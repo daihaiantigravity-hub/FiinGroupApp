@@ -220,6 +220,24 @@ app.MapGet("/api/v2/tfs/projects/{projectId}/iterations", async (string projectI
         return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
     }
 });
+app.MapGet("/api/v2/tfs/projects/{projectId}/work-item-types", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
+    if (credential is null) return Results.Unauthorized();
+    try
+    {
+        var types = await reader.GetWorkItemTypesAsync(credential, projectId, request.Query["collection"], cancellationToken);
+        return Results.Ok(new { success = true, data = types });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
 app.MapGet("/api/v2/tfs/projects/{projectId}/work-items", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];

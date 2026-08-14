@@ -38,6 +38,7 @@
 - Jarvis project backend routes, tables and TFS synchronization behavior are documented in `inception/reverse-engineering/jarvis-project-backend-baseline.md`.
 - The target business-database boundary and approval gates are documented in `construction/project-management-data-boundary.md`.
 - The source project-management sheet/API parity matrix is documented in `construction/project-management-route-parity.md`.
+- Jarvis PM table mapping and the target-only synthetic local fixture are documented in `docs/project-management-fixture.md`.
 - Wiki and announcements compatibility boundary is documented in `construction/content-compatibility.md`.
 - UI/backend correction decisions are documented in `construction/ui-backend-review-correction.md`.
 - TFS pilot permission provisioning is documented in `docs/tfs-permission-provisioning-runbook.md`.

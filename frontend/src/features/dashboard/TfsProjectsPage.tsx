@@ -6,6 +6,7 @@ import {
   getTfsTeams,
   getTfsWorkItem,
   getTfsWorkItems,
+  getTfsWorkItemTypes,
   createTfsWorkItem,
   updateTfsWorkItem,
   type TfsIteration,
@@ -14,6 +15,7 @@ import {
   type TfsCreateWorkItemRequest,
   type TfsUpdateWorkItemRequest,
   type TfsWorkItemDetail,
+  type TfsWorkItemType,
   type TfsWorkItem,
 } from '../auth/tfsProjectClient';
 
@@ -85,9 +87,15 @@ function ToolMenuIcon({ kind }: { kind: ToolMenuIconKind }) {
 
 function TfsTaskCreateModal({ project, workItems, item, onClose, onCreated }: { project: TfsProject; workItems: TfsWorkItem[]; item?: TfsWorkItemDetail; onClose: () => void; onCreated: (item: TfsWorkItemDetail) => void }) {
   const [form, setForm] = useState<TfsCreateWorkItemRequest>(() => item ? { workItemType: item.workItemType ?? 'Task', title: item.title ?? '', description: item.description ?? '', priority: item.priorityCode || 2, assignedTo: item.assignedTo ?? '', iterationPath: item.iterationPath ?? '', startDate: item.startDate?.slice(0, 10), finishDate: item.finishDate?.slice(0, 10), tags: item.tags ?? '', parentId: item.parentId ?? undefined } : { workItemType: 'Task', title: '', priority: 2 });
+  const [workItemTypes, setWorkItemTypes] = useState<TfsWorkItemType[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const assignees = [...new Set(workItems.map(item => item.assignedTo).filter((value): value is string => Boolean(value)))].sort();
+  useEffect(() => {
+    let active = true;
+    void getTfsWorkItemTypes(project).then(types => { if (active) setWorkItemTypes(types); }).catch(() => { if (active) setWorkItemTypes([]); });
+    return () => { active = false; };
+  }, [project]);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.title.trim()) { setError('Vui lòng nhập tên công việc.'); return; }
@@ -108,7 +116,7 @@ function TfsTaskCreateModal({ project, workItems, item, onClose, onCreated }: { 
       <header><div><p className="eyebrow">TFS Work Item · {project.name}</p><h3 id="create-work-item-title">{item ? 'Sửa Task' : 'Thêm Task mới'}</h3></div><button type="button" className="work-item-modal-close" onClick={onClose} aria-label="Đóng">×</button></header>
       <div className="tfs-create-task-grid">
         <label className="tfs-create-task-wide">Tên công việc <span className="required">*</span><input value={form.title} onChange={event => update('title', event.target.value)} autoFocus maxLength={250} /></label>
-        <label>Loại Work Item<input value={form.workItemType ?? 'Task'} onChange={event => update('workItemType', event.target.value)} /></label>
+        <label>Loại Work Item{workItemTypes.length > 0 ? <select value={form.workItemType ?? workItemTypes[0].name} onChange={event => update('workItemType', event.target.value)}>{workItemTypes.map(type => <option key={type.name} value={type.name}>{type.name}</option>)}</select> : <input value={form.workItemType ?? 'Task'} onChange={event => update('workItemType', event.target.value)} />}</label>
         <label>Độ ưu tiên<select value={form.priority ?? 2} onChange={event => update('priority', Number(event.target.value))}><option value="1">Thấp</option><option value="2">Trung bình</option><option value="3">Cao</option><option value="4">Khẩn cấp</option></select></label>
         <label>Người thực hiện<input list="tfs-create-assignees" value={form.assignedTo ?? ''} onChange={event => update('assignedTo', event.target.value)} /><datalist id="tfs-create-assignees">{assignees.map(value => <option key={value} value={value} />)}</datalist></label>
         <label>Iteration Path<input value={form.iterationPath ?? ''} onChange={event => update('iterationPath', event.target.value)} placeholder={project.name} /></label>

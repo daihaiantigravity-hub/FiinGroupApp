@@ -8,6 +8,7 @@ export type TfsProject = {
 };
 export type TfsTeam = { id: string; name: string; description: string | null; url: string | null };
 export type TfsIteration = { id: string; name: string; path: string | null; timeFrame: string | null; url: string | null };
+export type TfsWorkItemType = { name: string; referenceName: string | null; description: string | null; url: string | null };
 export type TfsWorkItem = { id: number; revision: number; title: string | null; workItemType: string | null; state: string | null; assignedTo: string | null; iterationPath: string | null; parentId: number | null; startDate: string | null; finishDate: string | null; targetDate: string | null; closedDate: string | null; statusCode: number; progress: number; plan: number; priorityCode: number; taskCode: string | null; product: string | null; createdBy: string | null; url: string | null; generatedFields?: Record<string, string> };
 export type TfsWorkItemDetail = TfsWorkItem & { description: string | null; createdDate: string | null; changedDate: string | null; priority: string | null; tags: string | null; history: string | null };
 export type TfsCreateWorkItemRequest = { workItemType?: string; title: string; description?: string; priority?: number; assignedTo?: string; iterationPath?: string; startDate?: string; finishDate?: string; tags?: string; parentId?: number };
@@ -48,6 +49,7 @@ async function getProjectData<T>(project: TfsProject, suffix: string): Promise<T
 
 export const getTfsTeams = (project: TfsProject) => getProjectData<TfsTeam[]>(project, 'teams');
 export const getTfsIterations = (project: TfsProject) => getProjectData<TfsIteration[]>(project, 'iterations');
+export const getTfsWorkItemTypes = (project: TfsProject) => getProjectData<TfsWorkItemType[]>(project, 'work-item-types');
 export const getTfsWorkItems = (project: TfsProject, limit = 100, offset = 0) => getProjectData<{ collection: string; projectId: string; totalAvailable: number; items: TfsWorkItem[] }>(project, 'work-items?limit=' + limit + '&offset=' + offset + '&projectName=' + encodeURIComponent(project.name));
 export const getTfsWorkItem = (project: TfsProject, workItemId: number) => getProjectData<TfsWorkItemDetail>(project, 'work-items/' + workItemId);
 

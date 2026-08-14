@@ -15,7 +15,7 @@ phần đọc dữ liệu TFS đã có contract ở API v2.
 | `project-tasks.html` header/tabs/toolbar | `.page-header-wrapper`, task toolbar, view toggle, Công cụ popover và `+ Thêm Task` | Đã căn theo trạng thái task view của Jarvis; Tổng hợp/Resource chờ nguồn DB/API |
 | Project summary | Collection, trạng thái, project ID, KPI số team/work item | Đã có |
 | Team/iteration/project data | Bảng đọc-only lấy từ `/api/v2/tfs/projects/{id}/...`, có xem chi tiết work item | Đã có |
-| WBS / `project-tasks` | TFS WBS read-only theo Iteration Path và `System.Parent`, có thống kê, bộ lọc và Gantt khi có ngày TFS | Đã có bản đầu; chưa có mutation |
+| WBS / `project-tasks` | TFS WBS theo Iteration Path và `System.Parent`, có thống kê, bộ lọc và Gantt khi có ngày TFS | Đã có read projection; create/edit là capability được feature-flag và permission gate |
 | Charter, Stakeholder, Resource & RACI, Risk, Cost, Quality, Change Log | Chưa chuyển | Không triển khai khi chưa có DB Jarvis và contract được phê duyệt |
 
 Các sheet PMBOK vẫn được hiển thị trong thanh sheet để giữ cấu trúc quen thuộc
@@ -29,8 +29,8 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
   file trong repository đó.
 - React gọi API TFS target bằng session TFS hiện tại và không gọi trực tiếp
   TFS từ trình duyệt.
-- Dữ liệu trên màn này là read-only; chưa có thao tác tạo/sửa/xóa dự án,
-  team, iteration hoặc work item.
+- Dữ liệu project/team/iteration là read-only. Work item create/edit là capability
+  riêng, mặc định tắt và chỉ mở khi TFS write flag cùng permission được cấp.
 - Lỗi API phải được hiển thị kèm error code để đối chiếu với backend và TFS.
 - Chỉ mở các sheet đã có API; sheet chưa có nguồn dữ liệu phải hiển thị rõ
   trạng thái “chưa triển khai”, không hiển thị dữ liệu giả.
@@ -39,8 +39,8 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
   tiến độ, ngày tháng, baseline, resource workload và mutation trong DB.
 - API WBS dùng `limit` và `offset`; giao diện tải theo từng nhóm tối đa 100
   work item để không tải toàn bộ project lớn trong một lần.
-- Work item detail dùng endpoint riêng và chỉ hiển thị dữ liệu đọc từ TFS;
-  modal không có hành động sửa/xóa.
+- Work item detail dùng endpoint riêng và đọc từ TFS; thao tác sửa chỉ được mở
+  qua flow gated, còn xóa/progress/baseline vẫn ở migration boundary.
 - Mapping WBS bám theo `server/services/tfs-jarvis-mapper.js`: status dùng các mã
   `0/1/2/3`, progress dùng `CompletedWork/(CompletedWork+RemainingWork)` và
   fallback `100/50/0` theo status.
@@ -159,3 +159,17 @@ The source-like Sửa Task and Xóa Task controls are visible in the task grid,
 but currently open an explicit boundary notice and do not send a mutation.
 
 Sửa Task is now a separately gated direct-TFS update using a revision guard. Xóa Task remains disabled and opens an explicit boundary notice.
+
+## Fixture and current mutation boundary — 2026-08-14
+
+The local schema comparison and synthetic data fixture are documented in
+`docs/project-management-fixture.md` and
+`backend/Database/Fixtures/project-management-local-fixture.sql`.
+The fixture is not loaded by the API. It exists only for local schema/WBS mapping
+checks; the running UI continues to read project/team/iteration/work-item data
+from TFS and does not pretend that fixture rows are production data.
+
+Current behavior is therefore intentionally split: TFS work-item create/edit is
+feature-flagged and permission-gated, while Jarvis business-store operations such
+as delete, progress audit, baseline, dependency persistence, import/export and
+PMBOK sheets remain outside this slice.

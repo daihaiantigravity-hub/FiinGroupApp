@@ -49,6 +49,11 @@ Database migrations are applied explicitly with `backend.DatabaseMigrator`; the 
 
 Disposable database integration setup is documented in `docs/integration-test-runbook.md`; it uses MariaDB and is separate from Jarvis.
 
+For schema/WBS comparison only, the target also contains a synthetic local fixture
+at `backend/Database/Fixtures/project-management-local-fixture.sql`. It is not
+loaded at startup and must only be imported into a disposable local database; it
+does not contain Jarvis business records or credentials.
+
 Pilot users are created explicitly with `backend.IdentityProvisioner`; no credentials are seeded in source control.
 
 For the internal TFS pilot, grant read-only project permissions explicitly with

@@ -11,6 +11,7 @@ namespace FiinGroupApp.Api.Tfs;
 public sealed record TfsProjectSummary(string Collection, string Id, string Name, string? Description, string? State, string? Url);
 public sealed record TfsTeamSummary(string Id, string Name, string? Description, string? Url);
 public sealed record TfsIterationSummary(string Id, string Name, string? Path, string? TimeFrame, string? Url);
+public sealed record TfsWorkItemTypeSummary(string Name, string? ReferenceName, string? Description, string? Url);
 public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? StartDate, string? FinishDate, string? TargetDate, string? ClosedDate, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
 public sealed record TfsWorkItemDetail(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? Description, string? CreatedDate, string? ChangedDate, string? StartDate, string? FinishDate, string? TargetDate, string? Priority, string? Tags, string? History, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
 public sealed record TfsCreateWorkItemRequest(string? WorkItemType, string Title, string? Description, int? Priority, string? AssignedTo, string? IterationPath, string? StartDate, string? FinishDate, string? Tags, int? ParentId);
@@ -22,6 +23,7 @@ public interface ITfsProjectReader
     Task<TfsProjectSummary?> GetProjectAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
     Task<IReadOnlyList<TfsTeamSummary>> GetTeamsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
     Task<IReadOnlyList<TfsIterationSummary>> GetIterationsAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TfsWorkItemTypeSummary>> GetWorkItemTypesAsync(TfsSessionCredential credential, string projectId, string? collection, CancellationToken cancellationToken);
     Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collection, string? projectName, int limit, int offset, CancellationToken cancellationToken);
     Task<TfsWorkItemDetail?> GetWorkItemAsync(TfsSessionCredential credential, string projectId, int workItemId, string? collection, CancellationToken cancellationToken);
     Task<TfsWorkItemDetail> CreateWorkItemAsync(TfsSessionCredential credential, string projectId, string? collection, TfsCreateWorkItemRequest request, CancellationToken cancellationToken);
@@ -86,6 +88,19 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         var response = await SendAsync(client, collection + "/" + Uri.EscapeDataString(project) + "/_apis/work/teamsettings/iterations?api-version=2.0-preview.1", cancellationToken);
         var payload = await response.Content.ReadFromJsonAsync<TfsListResponse<TfsIterationDto>>(cancellationToken: cancellationToken) ?? new TfsListResponse<TfsIterationDto>();
         return payload.Value.Select(iteration => new TfsIterationSummary(iteration.Id ?? string.Empty, iteration.Name ?? string.Empty, iteration.Path, iteration.Attributes?.TimeFrame, iteration.Url)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<TfsWorkItemTypeSummary>> GetWorkItemTypesAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, CancellationToken cancellationToken)
+    {
+        var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
+        var project = ValidateProjectId(projectId);
+        using var client = CreateClient(credential);
+        var response = await SendAsync(client, collection + "/" + Uri.EscapeDataString(project) + "/_apis/wit/workitemtypes?api-version=1.0", cancellationToken, "work item types");
+        var payload = await response.Content.ReadFromJsonAsync<TfsListResponse<TfsWorkItemTypeDto>>(cancellationToken: cancellationToken) ?? new TfsListResponse<TfsWorkItemTypeDto>();
+        return payload.Value
+            .Where(type => !string.IsNullOrWhiteSpace(type.Name))
+            .Select(type => new TfsWorkItemTypeSummary(type.Name!, type.ReferenceName, type.Description, type.Url))
+            .ToArray();
     }
 
     public async Task<TfsWorkItemQueryResult> GetWorkItemsAsync(TfsSessionCredential credential, string projectId, string? collectionOverride, string? projectName, int limit, int offset, CancellationToken cancellationToken)
@@ -456,6 +471,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
     private sealed class TfsTeamDto { [JsonPropertyName("id")] public string? Id { get; init; } [JsonPropertyName("name")] public string? Name { get; init; } [JsonPropertyName("description")] public string? Description { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } }
     private sealed class TfsIterationDto { [JsonPropertyName("id")] public string? Id { get; init; } [JsonPropertyName("name")] public string? Name { get; init; } [JsonPropertyName("path")] public string? Path { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } [JsonPropertyName("attributes")] public TfsIterationAttributes? Attributes { get; init; } }
     private sealed class TfsIterationAttributes { [JsonPropertyName("timeFrame")] public string? TimeFrame { get; init; } }
+    private sealed class TfsWorkItemTypeDto { [JsonPropertyName("name")] public string? Name { get; init; } [JsonPropertyName("referenceName")] public string? ReferenceName { get; init; } [JsonPropertyName("description")] public string? Description { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } }
     private sealed class TfsWiqlResponse { [JsonPropertyName("workItems")] public List<TfsWorkItemReference> WorkItems { get; init; } = []; }
     private sealed class TfsWorkItemReference { [JsonPropertyName("id")] public int Id { get; init; } }
     private sealed class TfsWorkItemDto { [JsonPropertyName("id")] public int Id { get; init; } [JsonPropertyName("rev")] public int Revision { get; init; } [JsonPropertyName("url")] public string? Url { get; init; } [JsonPropertyName("fields")] public Dictionary<string, JsonElement>? Fields { get; init; } }
