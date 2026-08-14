@@ -29,3 +29,4 @@ The FiinGroupApp identity store is a separate database owned by the new applicat
 - TFS login can remain compatibility-only with an empty permission snapshot. Enabling `Tfs:RequireIdentityMapping=true` makes unmapped TFS identities fail closed with 403.
 - If identity mapping is enabled but its database/migration is unavailable, login fails closed with a safe 503 instead of falling back to empty permissions.
 - `backend.IdentityMappingProvisioner` creates only an explicit provider-to-existing-user mapping; it cannot create users, overwrite another mapping or grant permissions.
+- `backend.PermissionProvisioner` is a separate explicit pilot operation. It grants only reviewed read permissions and never runs during application startup.

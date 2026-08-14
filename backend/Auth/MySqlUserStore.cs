@@ -2,7 +2,7 @@ using MySqlConnector;
 
 namespace FiinGroupApp.Api.Auth;
 
-public sealed class MySqlUserStore(string connectionString, IPasswordHasher passwordHasher) : IUserStore, ITfsIdentityResolver
+public sealed class MySqlUserStore(string connectionString, IPasswordHasher passwordHasher, ILogger<MySqlUserStore> logger) : IUserStore, ITfsIdentityResolver
 {
     public async Task<AuthenticatedUser?> ResolveAsync(TfsIdentity identity, CancellationToken cancellationToken)
     {
@@ -22,9 +22,17 @@ public sealed class MySqlUserStore(string connectionString, IPasswordHasher pass
             }
             return null;
         }
-        catch (MySqlException)
+        catch (MySqlException exception)
         {
-            throw new TfsIdentityMappingException("TFS identity store is temporarily unavailable.", "TFS_IDENTITY_STORE_UNAVAILABLE", StatusCodes.Status503ServiceUnavailable);
+            logger.LogError(exception, "Identity store query failed for TFS identity {IdentityId} and provider subject lookup.", identity.IdentityId);
+            var (code, message) = exception.Number switch
+            {
+                1045 => ("TFS_IDENTITY_STORE_ACCESS_DENIED", "Identity store rejected the configured database credentials."),
+                1049 => ("TFS_IDENTITY_STORE_DATABASE_NOT_FOUND", "Identity store database was not found."),
+                1146 => ("TFS_IDENTITY_STORE_SCHEMA_MISSING", "Identity store schema is missing a required table."),
+                _ => ("TFS_IDENTITY_STORE_UNAVAILABLE", "TFS identity store is temporarily unavailable.")
+            };
+            throw new TfsIdentityMappingException(message, code, StatusCodes.Status503ServiceUnavailable);
         }
     }
 

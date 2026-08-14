@@ -212,6 +212,32 @@
   available; no placeholder action or mutation was added.
 - Re-ran TypeScript strict, Vite production and .NET API builds successfully.
 
+## 2026-08-14 — Project-management interaction parity checkpoint
+
+- Added source-aligned reset behavior when the project select returns to its
+  empty option, including clearing TFS data and the persisted management
+  project selection.
+- Added click-outside and Escape handling for the Công cụ popover and all
+  read-only migration boundary/work-item dialogs.
+- Added source-like feedback for unavailable PM sheets, Resource, mutation,
+  baseline, history and import/export actions without creating write APIs or
+  fabricated data.
+- Added table scroll-edge state so the left/right buttons reflect the actual
+  horizontal scroll position.
+- Verified frontend TypeScript build, production Vite build, 8 frontend tests
+  and `git diff --check`; no files in `FiinGroup.Jarvis` were modified.
+
+## 2026-08-14 — Jarvis PM database comparison gate
+
+- Verified the existing Jarvis MySQL tunnel with a read-only connection; no
+  credentials were copied into `FiinGroupApp` or committed.
+- The current database snapshot has zero `pm_project` rows, zero optional
+  PMBOK tables used by `pm-flow`, one task row and three Redmine project rows.
+- Because there is no source project record to map to the selected TFS
+  projects, the target does not enable source editor save/delete behavior or
+  fabricate PM flow data. The target remains TFS read-only with explicit
+  boundary popups until an approved mapping/data snapshot is supplied.
+
 ## 2026-08-13 — Project-management TFS KPI checkpoint
 
 - When a project is selected in `projectmanagement`, the target now loads Teams
@@ -285,3 +311,163 @@
   bearer propagation and empty-list responses.
 - Frontend test suite now passes: 2 files and 8 tests.
 - TypeScript strict, Vite production and .NET API builds remain green.
+
+## 2026-08-13 — Content navigation and dashboard cleanup checkpoint
+
+- Moved Wiki and announcements into a dedicated `Nội dung` navigation group,
+  matching the source information architecture more closely.
+- Removed the duplicate legacy dashboard KPI strip so the new Jarvis-aligned
+  four-card KPI row is the single source of displayed dashboard metrics.
+- Added `frontend/.env.example` and documented legacy/target proxy mode setup.
+- Frontend test suite remains green: 2 files and 8 tests; TypeScript, Vite and
+  .NET builds passed with zero errors.
+
+## 2026-08-13 — Standalone documents source-boundary checkpoint
+
+- Re-checked `FiinGroup.Jarvis/pages/documents/documents.html`; the source
+  module is explicitly `[WIP]` and has no data/API contract.
+- Added target route `/documents` with the same WIP presentation and no API
+  call, CRUD, fabricated data or Chatbot-document behavior.
+- Recorded the boundary in `construction/content-compatibility.md` and kept
+  `FiinGroup.Jarvis` unchanged.
+
+## 2026-08-13 — Application shell source-alignment checkpoint
+
+- Compared the Jarvis sidebar behavior: collapsed by default and persisted in
+  `localStorage` under `sidebarCollapsed`.
+- Added the same collapse/expand behavior to the React shell, including a
+  responsive mobile override; no new business route or API was introduced.
+- Frontend tests passed: 2 files and 8 tests; TypeScript and Vite production
+  build passed with zero errors.
+
+## 2026-08-13 - UI/backend review correction checkpoint
+
+- Removed target-only dashboard platform cards and kept the dashboard shape
+  aligned with `FiinGroup.Jarvis/pages/dashboard/dashboard.html`.
+- Changed the shell identity to the source JARVIS identity and source favicon;
+  no new business routes were added.
+- Added form-level read permission checks to the target TFS read endpoints.
+- Preserved TFS 4xx status codes, disabled NTLM auto-redirects and gated
+  Swagger to Development.
+- Added `generatedFields` provenance to TFS work-item projections for fallback
+  dates, inferred progress and inferred plan.
+- Frontend production build and temporary-output .NET build passed. Backend
+  test execution still needs a clean output run because the active API process
+  locks the normal build output.
+
+## 2026-08-13 - TFS pilot read permission checkpoint
+
+- Added the explicit `backend.PermissionProvisioner` tool for the separate
+  identity store.
+- It creates/reuses `TFS_READONLY` and grants only `ACCESS` and `VIEW` for
+  `pm-projects`, `projectmanagement` and `project-tasks`.
+- It never creates users, changes external identity mappings, grants mutation
+  permissions or runs during API startup.
+- Added the technical-pilot runbook and built the provisioner successfully.
+- Executed the provisioner for `technical.user` against the running disposable
+  identity database; verification showed the expected read-only TFS permissions.
+
+## 2026-08-14 — Jarvis development environment verification
+
+- Confirmed that the running Jarvis development loader uses `.env.development`
+  with the same database target used in the read-only comparison.
+- Did not run the legacy TFS-to-Jarvis synchronization script because it writes
+  to the trusted source database and is outside the approved migration scope.
+
+## 2026-08-14 — Project task summary stats UI parity
+
+- Replaced target summary-stat text glyphs with the exact five inline SVG icon
+  structures and source labels from `pages/projects/project-tasks.html`.
+- Aligned card flex layout, spacing, gradients, success border, typography and
+  hover transition with `pages/projects/project-tasks.css`.
+- Kept the source behavior: stats remain hidden until a project is selected and
+  TFS work items are loaded.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Project task Gantt/list toggle correction
+
+- Replaced the target text-button view switch with the source-equivalent
+  controlled radio/label interaction and source SVG icons.
+- Verified the `list -> gantt -> list` state path at compile/test level.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Project task toolbar icon parity
+
+- Replaced target text glyphs for Resource, Công cụ and Thêm Task with the
+  corresponding source SVG structures.
+- Preserved the existing read-only boundaries and click behavior.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Project task tools popover icon parity
+
+- Added source-equivalent SVG icons and flex alignment to the existing Công cụ
+  popover entries: sync, critical path, baseline, history, export/import and
+  refresh.
+- Kept every unavailable command as a read-only boundary popup; no mutation
+  endpoint was introduced.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Identity-store diagnostic correction
+
+- Added safe backend logging for MySQL identity-resolution failures.
+- Added non-secret error categories for access denied, missing database and
+  missing schema while retaining the generic unavailable response for other
+  failures.
+- Verified the backend builds successfully with the API process output isolated
+  from the active runtime output.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Application-shell tab interaction correction
+
+- Replaced the nested close-button-inside-link structure with separate tab
+  navigation and close controls.
+- Preserved the Jarvis-aligned visual state while preventing a close click from
+  triggering navigation or losing the remaining open tabs.
+- Verified frontend tests and production build after the change.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — TFS project selection race correction
+
+- Invalidated stale project/data/detail requests when the selected TFS project
+  changes, preventing an earlier response from overwriting the current project.
+- Reset detail loading state when clearing or changing projects so Work Item
+  detail remains usable after a fast project switch.
+- Verified frontend tests, frontend production build and isolated backend build.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Open-tab state preservation checkpoint
+
+- Kept all opened target pages mounted and hid only the inactive page, so
+  project selection, filters, Gantt mode and loaded read-only data survive tab
+  switching.
+- Kept the Dashboard tab pinned and retained the existing per-user open-tab
+  storage and close behavior.
+- Verified frontend tests, backend tests and frontend production build.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Open-tab horizontal scrolling checkpoint
+
+- Added source-aligned left/right tab scrolling controls for long tab lists.
+- Tab overflow is contained in the top bar; hover and disabled states are
+  explicit and the controls update on resize and horizontal scroll.
+- Verified frontend tests, backend tests and frontend production build.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — Open-tab context menu checkpoint
+
+- Added source-aligned context actions for the open-tab bar: close current,
+  left, right, other and all non-pinned tabs.
+- Disabled destructive tab actions when there is no applicable target and kept
+  Dashboard pinned.
+- Escape and outside click close the context menu without touching business
+  data.
+- Verified frontend tests, backend tests and frontend production build.
+- No files under `FiinGroup.Jarvis` were changed.
+
+## 2026-08-14 — TFS read-only route discoverability checkpoint
+
+- Added the existing `/projects` TFS browser route to the Dự án menu.
+- This exposes collections, projects, Teams, Iterations and Work Items through
+  the already-authorized read-only target API; no new endpoint or permission
+  bypass was added.
+- No files under `FiinGroup.Jarvis` were changed.

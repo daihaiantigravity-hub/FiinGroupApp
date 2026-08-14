@@ -11,8 +11,8 @@ namespace FiinGroupApp.Api.Tfs;
 public sealed record TfsProjectSummary(string Collection, string Id, string Name, string? Description, string? State, string? Url);
 public sealed record TfsTeamSummary(string Id, string Name, string? Description, string? Url);
 public sealed record TfsIterationSummary(string Id, string Name, string? Path, string? TimeFrame, string? Url);
-public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? StartDate, string? FinishDate, string? TargetDate, string? ClosedDate, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url);
-public sealed record TfsWorkItemDetail(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? Description, string? CreatedDate, string? ChangedDate, string? StartDate, string? FinishDate, string? TargetDate, string? Priority, string? Tags, string? History, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url);
+public sealed record TfsWorkItemSummary(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? StartDate, string? FinishDate, string? TargetDate, string? ClosedDate, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
+public sealed record TfsWorkItemDetail(int Id, int Revision, string? Title, string? WorkItemType, string? State, string? AssignedTo, string? IterationPath, int? ParentId, string? Description, string? CreatedDate, string? ChangedDate, string? StartDate, string? FinishDate, string? TargetDate, string? Priority, string? Tags, string? History, int StatusCode, decimal Progress, decimal Plan, int PriorityCode, string? TaskCode, string? Product, string? CreatedBy, string? Url, IReadOnlyDictionary<string, string> GeneratedFields);
 
 public interface ITfsProjectReader
 {
@@ -172,7 +172,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
             throw new TfsProjectException("TFS base URL must be an absolute HTTP or HTTPS URL.", "TFS_URL_INVALID", StatusCodes.Status503ServiceUnavailable);
         var credentials = new CredentialCache();
         credentials.Add(baseUri, "NTLM", new NetworkCredential(credential.Username, credential.Password, credential.Domain));
-        var handler = new HttpClientHandler { Credentials = credentials, PreAuthenticate = false, UseCookies = false, AllowAutoRedirect = true, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
+        var handler = new HttpClientHandler { Credentials = credentials, PreAuthenticate = false, UseCookies = false, AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
         var client = new HttpClient(handler) { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds)) };
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         client.DefaultRequestHeaders.UserAgent.ParseAdd("FiinGroupApp-TFS-Project/1.0");
@@ -199,7 +199,8 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         var statusCode = MapStatus(Field(item.Fields, "System.State"));
         var startDate = MappedStartDate(item.Fields);
         var endDate = MappedEndDate(item.Fields);
-        return new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), Field(item.Fields, "System.IterationPath"), IntegerField(item.Fields, "System.Parent"), startDate, endDate, Field(item.Fields, "Microsoft.VSTS.Scheduling.TargetDate"), Field(item.Fields, "Microsoft.VSTS.Common.ClosedDate"), statusCode, CalculateProgress(item.Fields, statusCode), CalculatePlan(startDate, endDate, CalculateProgress(item.Fields, statusCode)), MapPriority(IntegerField(item.Fields, "Microsoft.VSTS.Common.Priority")), "TFS-" + item.Id, Field(item.Fields, "System.Tags") ?? Field(item.Fields, "System.AreaPath"), CreatedByLogin(Field(item.Fields, "System.CreatedBy")), item.Url);
+        var progress = CalculateProgress(item.Fields, statusCode);
+        return new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), Field(item.Fields, "System.IterationPath"), IntegerField(item.Fields, "System.Parent"), startDate, endDate, Field(item.Fields, "Microsoft.VSTS.Scheduling.TargetDate"), Field(item.Fields, "Microsoft.VSTS.Common.ClosedDate"), statusCode, progress, CalculatePlan(startDate, endDate, progress), MapPriority(IntegerField(item.Fields, "Microsoft.VSTS.Common.Priority")), "TFS-" + item.Id, Field(item.Fields, "System.Tags") ?? Field(item.Fields, "System.AreaPath"), CreatedByLogin(Field(item.Fields, "System.CreatedBy")), item.Url, GeneratedFields(item.Fields));
     }
 
     private static TfsWorkItemDetail MapWorkItemDetail(TfsWorkItemDto item)
@@ -207,7 +208,21 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         var statusCode = MapStatus(Field(item.Fields, "System.State"));
         var startDate = MappedStartDate(item.Fields);
         var endDate = MappedEndDate(item.Fields);
-        return new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), Field(item.Fields, "System.IterationPath"), IntegerField(item.Fields, "System.Parent"), Field(item.Fields, "System.Description"), Field(item.Fields, "System.CreatedDate"), Field(item.Fields, "System.ChangedDate"), startDate, Field(item.Fields, "Microsoft.VSTS.Scheduling.FinishDate"), Field(item.Fields, "Microsoft.VSTS.Scheduling.TargetDate"), Field(item.Fields, "Microsoft.VSTS.Common.Priority"), Field(item.Fields, "System.Tags"), Field(item.Fields, "System.History"), statusCode, CalculateProgress(item.Fields, statusCode), CalculatePlan(startDate, endDate, CalculateProgress(item.Fields, statusCode)), MapPriority(IntegerField(item.Fields, "Microsoft.VSTS.Common.Priority")), "TFS-" + item.Id, Field(item.Fields, "System.Tags") ?? Field(item.Fields, "System.AreaPath"), CreatedByLogin(Field(item.Fields, "System.CreatedBy")), item.Url);
+        var progress = CalculateProgress(item.Fields, statusCode);
+        return new(item.Id, item.Revision, Field(item.Fields, "System.Title"), Field(item.Fields, "System.WorkItemType"), Field(item.Fields, "System.State"), Field(item.Fields, "System.AssignedTo"), Field(item.Fields, "System.IterationPath"), IntegerField(item.Fields, "System.Parent"), Field(item.Fields, "System.Description"), Field(item.Fields, "System.CreatedDate"), Field(item.Fields, "System.ChangedDate"), startDate, Field(item.Fields, "Microsoft.VSTS.Scheduling.FinishDate"), Field(item.Fields, "Microsoft.VSTS.Scheduling.TargetDate"), Field(item.Fields, "Microsoft.VSTS.Common.Priority"), Field(item.Fields, "System.Tags"), Field(item.Fields, "System.History"), statusCode, progress, CalculatePlan(startDate, endDate, progress), MapPriority(IntegerField(item.Fields, "Microsoft.VSTS.Common.Priority")), "TFS-" + item.Id, Field(item.Fields, "System.Tags") ?? Field(item.Fields, "System.AreaPath"), CreatedByLogin(Field(item.Fields, "System.CreatedBy")), item.Url, GeneratedFields(item.Fields));
+    }
+
+    private static IReadOnlyDictionary<string, string> GeneratedFields(Dictionary<string, JsonElement>? fields)
+    {
+        var generated = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (Field(fields, "Microsoft.VSTS.Scheduling.StartDate") is null)
+            generated["startDate"] = "Fallback từ System.CreatedDate; không phải ngày kế hoạch TFS";
+        if (Field(fields, "Microsoft.VSTS.Scheduling.FinishDate") is null && Field(fields, "Microsoft.VSTS.Scheduling.TargetDate") is null)
+            generated["finishDate"] = "Fallback từ System.ChangedDate/ClosedDate; không phải ngày kết thúc kế hoạch TFS";
+        if (DecimalField(fields, "Microsoft.VSTS.Scheduling.CompletedWork") is null || DecimalField(fields, "Microsoft.VSTS.Scheduling.RemainingWork") is null)
+            generated["progress"] = "Suy ra từ System.State vì TFS không có CompletedWork/RemainingWork";
+        generated["plan"] = "TFS không có field % kế hoạch tương đương trực tiếp";
+        return generated;
     }
 
     private static int MapStatus(string? state)
@@ -310,7 +325,10 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         if (!response.IsSuccessStatusCode)
         {
             var code = operation == "WIQL" ? "TFS_WIQL_HTTP_ERROR" : operation == "work item batch" ? "TFS_WORK_ITEMS_HTTP_ERROR" : "TFS_PROJECTS_HTTP_ERROR";
-            throw new TfsProjectException("TFS returned HTTP " + (int)response.StatusCode + " for the " + operation + " request.", code, StatusCodes.Status503ServiceUnavailable);
+            var statusCode = (int)response.StatusCode is >= 400 and < 500
+                ? (int)response.StatusCode
+                : StatusCodes.Status503ServiceUnavailable;
+            throw new TfsProjectException("TFS returned HTTP " + (int)response.StatusCode + " for the " + operation + " request.", code, statusCode);
         }
         return response;
     }

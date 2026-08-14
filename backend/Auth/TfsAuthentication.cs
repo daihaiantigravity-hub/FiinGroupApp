@@ -45,7 +45,7 @@ public sealed class TfsAuthenticationService(TfsOptions options) : ITfsAuthentic
             Credentials = credentialCache,
             PreAuthenticate = false,
             UseCookies = false,
-            AllowAutoRedirect = true,
+            AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
         };
         using var client = new HttpClient(handler) { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds)) };

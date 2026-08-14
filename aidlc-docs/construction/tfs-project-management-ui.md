@@ -11,15 +11,16 @@ phần đọc dữ liệu TFS đã có contract ở API v2.
 | Jarvis | React target | Trạng thái |
 | --- | --- | --- |
 | Tiêu đề “Quản lý dự án” và bộ chọn dự án | `.projectmanagement-head` + `.projectmanagement-select` | Đã căn theo Jarvis |
-| `pmSheets` | Thanh sheet Tổng quan, Charter, Stakeholder, WBS, Resource & RACI, Cost & Budget, Risk, Quality, Communication, Change Log | Đã căn theo Jarvis; sheet thiếu DB hiển thị khóa |
-| `project-tasks.html` header/tabs/toolbar | `.page-header-wrapper`, tabs Tổng hợp/Tiến độ dự án, toolbar filter và view toggle | Đã căn theo Jarvis; Tổng hợp/Resource chờ nguồn DB/API |
+| `pmSheets` | Thanh sheet Tổng quan, Charter, Stakeholder, WBS, Resource & RACI, Cost & Budget, Risk, Quality, Communication, Change Log | Đã căn theo Jarvis; sheet thiếu DB bấm được và mở boundary popup |
+| `project-tasks.html` header/tabs/toolbar | `.page-header-wrapper`, task toolbar, view toggle, Công cụ popover và `+ Thêm Task` | Đã căn theo trạng thái task view của Jarvis; Tổng hợp/Resource chờ nguồn DB/API |
 | Project summary | Collection, trạng thái, project ID, KPI số team/work item | Đã có |
 | Team/iteration/project data | Bảng đọc-only lấy từ `/api/v2/tfs/projects/{id}/...`, có xem chi tiết work item | Đã có |
 | WBS / `project-tasks` | TFS WBS read-only theo Iteration Path và `System.Parent`, có thống kê, bộ lọc và Gantt khi có ngày TFS | Đã có bản đầu; chưa có mutation |
 | Charter, Stakeholder, Resource & RACI, Risk, Cost, Quality, Change Log | Chưa chuyển | Không triển khai khi chưa có DB Jarvis và contract được phê duyệt |
 
 Các sheet PMBOK vẫn được hiển thị trong thanh sheet để giữ cấu trúc quen thuộc
-của Jarvis, nhưng bị khóa và có tooltip giải thích lý do. Đây là boundary rõ
+của Jarvis. Khi chưa có nguồn Jarvis DB, click vào sheet sẽ mở boundary popup
+giải thích lý do thay vì giả lập editor hoặc ghi dữ liệu. Đây là boundary rõ
 ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ thuộc Jarvis DB.
 
 ## Quy tắc tương thích
@@ -43,16 +44,25 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
 - Mapping WBS bám theo `server/services/tfs-jarvis-mapper.js`: status dùng các mã
   `0/1/2/3`, progress dùng `CompletedWork/(CompletedWork+RemainingWork)` và
   fallback `100/50/0` theo status.
+- Các giá trị fallback/suy luận được trả kèm `generatedFields` (`startDate`,
+  `finishDate`, `progress`, `plan`) để không bị hiểu là dữ liệu kế hoạch gốc
+  của TFS.
 - Grid `project-tasks` giữ thứ tự cột của Jarvis: STT, mã, tên công việc,
   sản phẩm, người thực hiện, ngày, Actual, Plan, trạng thái, ưu tiên,
   người tạo và thao tác xem. Các thao tác ghi của Jarvis không được bật.
+- Task grid giữ header 13 cột ngay cả khi chưa chọn project, trạng thái rỗng
+  hiển thị trong một dòng của bảng, có scrollbar ngang riêng và nút cuộn
+  trái/phải giống `scroll-btn` của Jarvis. Menu Công cụ mở theo popover, đóng
+  khi click ra ngoài hoặc nhấn Escape; Làm mới gọi API đọc TFS, còn các lệnh
+  chưa có contract mở boundary popup và không ghi dữ liệu.
 - Gantt dùng ngày theo thứ tự `StartDate` và
   `FinishDate → TargetDate → ClosedDate`; khi thiếu thì fallback từ
   `CreatedDate`/`ChangedDate` giống mapper Jarvis. Vùng hiển thị có padding
   `-7/+14 ngày` như Gantt của Jarvis; có header tháng/ngày, weekend,
   today line, zoom và progress fill read-only.
-- Tab `Tổng hợp` và chế độ `Resource` của `project-tasks` vẫn chưa bật
-  vì phụ thuộc các API/DB Jarvis chưa có trong repository mới.
+- Tab `Tổng hợp` và chế độ `Resource` của `project-tasks` vẫn chưa có dữ liệu
+  tương đương vì phụ thuộc các API/DB Jarvis chưa có trong repository mới;
+  click Resource mở boundary popup, không tạo dữ liệu giả.
 
 ## Kiểm thử thủ công
 
@@ -75,7 +85,8 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
    khoảng ngày; nếu không có ngày, xác nhận thông báo rõ ràng.
 10. Xác nhận WBS không có request mutation gửi đến Jarvis/TFS.
 11. Xác nhận các sheet Charter, Stakeholder, Resource & RACI, Cost, Risk,
-   Quality, Communication và Change Log hiển thị nhưng không thể mở.
+   Quality, Communication và Change Log hiển thị; click vào từng sheet phải mở
+   boundary popup, không gọi mutation và không hiển thị dữ liệu giả.
 12. Mở `/project-tasks`, chọn project và xác nhận màn hình bắt đầu ở sheet WBS.
 13. Trong `/project-tasks`, xác nhận bảng có đủ 13 cột theo thứ tự của Jarvis:
    STT, Mã, Tên công việc, Sản phẩm, Người thực hiện, Bắt đầu, Kết thúc,
@@ -86,6 +97,28 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
    TB khớp với các work item đã tải.
 16. Trong Gantt, xác nhận header tháng/ngày, ngày cuối tuần, đường ngày hiện tại,
    nút Today, zoom và phần progress fill hiển thị theo dữ liệu TFS.
+17. Chọn lại giá trị rỗng ở bộ chọn dự án; xác nhận bảng, filter, popup và dữ
+   liệu chi tiết được reset về trạng thái “Vui lòng chọn dự án”.
+18. Mở Công cụ, click ra ngoài hoặc nhấn Escape; xác nhận popover đóng. Mở
+   popup work item hoặc boundary popup và xác nhận Escape/backdrop/nút Đóng
+   đều đóng được.
+
+19. Chọn biểu tượng Gantt rồi chọn lại biểu tượng Danh sách; xác nhận hai
+   trạng thái chuyển đổi hai chiều và chỉ một view được hiển thị. Toggle này
+   phải giữ cơ chế radio/label tương đương source để không bị kẹt ở Gantt.
+20. Xác nhận các icon Resource, Công cụ và Thêm Task là SVG tương đương
+   source; hover/focus không làm thay đổi kích thước hoặc lệch hàng toolbar.
+21. Mở Công cụ và xác nhận từng mục có icon, khoảng cách và hover giống
+   source; các mục chưa có API vẫn chỉ mở boundary popup, không ghi dữ liệu.
+
+### Summary stats parity
+
+`summary-stats` trong target giữ đúng cấu trúc và nhãn của
+`pages/projects/project-tasks.html`: năm card Tổng Task, Hoàn thành, Đang thực
+hiện, Quá hạn và Tiến độ TB; icon dùng inline SVG theo source thay cho ký tự
+text; màu gradient, kích thước, khoảng cách, border và hiệu ứng hover lấy từ
+`pages/projects/project-tasks.css`. Stats chỉ hiển thị sau khi đã chọn project
+và tải được work items, giống trạng thái `taskStats` của source.
 
 ## Definition of Done của slice UI
 
@@ -95,3 +128,14 @@ ràng giữa phần đã chuyển được (TFS read-only) và phần còn phụ
 - Không dùng dữ liệu mock cho kết quả TFS.
 - Chưa chuyển các màn PMBOK ghi dữ liệu khi chưa có quyền DB và yêu cầu
   nghiệp vụ được xác nhận.
+
+## Database comparison gate — 2026-08-14
+
+Read-only verification of the Jarvis development connection confirmed that the
+MySQL tunnel is reachable, but the current database snapshot contains no
+`pm_project` rows and none of the optional PMBOK tables used by
+`/api/pm-flow`. It contains only the currently available Redmine baseline and
+an isolated task row. Therefore the target cannot truthfully bind a selected
+TFS project to the Jarvis PM flow or enable the source editor save/delete
+actions yet. The target keeps those controls at the explicit migration
+boundary until an approved project mapping and source data snapshot exist.

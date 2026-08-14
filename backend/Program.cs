@@ -39,7 +39,7 @@ if (identityOptions.Enabled && string.IsNullOrWhiteSpace(identityOptions.Connect
 builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 if (identityOptions.Enabled)
 {
-    builder.Services.AddSingleton<MySqlUserStore>(sp => new MySqlUserStore(identityOptions.ConnectionString!, sp.GetRequiredService<IPasswordHasher>()));
+    builder.Services.AddSingleton<MySqlUserStore>(sp => new MySqlUserStore(identityOptions.ConnectionString!, sp.GetRequiredService<IPasswordHasher>(), sp.GetRequiredService<ILogger<MySqlUserStore>>()));
     builder.Services.AddSingleton<IUserStore>(sp => sp.GetRequiredService<MySqlUserStore>());
     builder.Services.AddSingleton<ITfsIdentityResolver>(sp => sp.GetRequiredService<MySqlUserStore>());
 }
@@ -65,8 +65,11 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     app.Logger.LogError(feature?.Error, "Unhandled API exception");
 }));
 app.UseCors();
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.MapHealthChecks("/health");
 app.MapGet("/api/v2/ping", () => Results.Ok(new { success = true, service = "fiingroup-app-api", version = "v2" }));
 app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth, ITargetSessionStore sessions, HttpResponse response, CancellationToken cancellationToken) =>
@@ -143,8 +146,10 @@ app.MapGet("/api/v2/auth/permissions", (HttpRequest request, ITargetSessionStore
 app.MapGet("/api/v2/tfs/projects", async (HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];
-    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
-    var credential = sessions.GetTfsCredential(sessionId);
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "pm-projects", "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
     if (credential is null)
         return Results.Json(new { success = false, error = new { code = "TFS_SESSION_CREDENTIAL_MISSING", message = "This session is not a TFS-authenticated session." } }, statusCode: StatusCodes.Status401Unauthorized);
     try
@@ -160,8 +165,10 @@ app.MapGet("/api/v2/tfs/projects", async (HttpRequest request, ITargetSessionSto
 app.MapGet("/api/v2/tfs/projects/{projectId}", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];
-    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
-    var credential = sessions.GetTfsCredential(sessionId);
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
     if (credential is null)
         return Results.Json(new { success = false, error = new { code = "TFS_SESSION_CREDENTIAL_MISSING", message = "This session is not a TFS-authenticated session." } }, statusCode: StatusCodes.Status401Unauthorized);
     try
@@ -179,8 +186,10 @@ app.MapGet("/api/v2/tfs/projects/{projectId}", async (string projectId, HttpRequ
 app.MapGet("/api/v2/tfs/projects/{projectId}/teams", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];
-    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
-    var credential = sessions.GetTfsCredential(sessionId);
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
     if (credential is null) return Results.Unauthorized();
     try
     {
@@ -195,8 +204,10 @@ app.MapGet("/api/v2/tfs/projects/{projectId}/teams", async (string projectId, Ht
 app.MapGet("/api/v2/tfs/projects/{projectId}/iterations", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];
-    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
-    var credential = sessions.GetTfsCredential(sessionId);
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
     if (credential is null) return Results.Unauthorized();
     try
     {
@@ -211,8 +222,10 @@ app.MapGet("/api/v2/tfs/projects/{projectId}/iterations", async (string projectI
 app.MapGet("/api/v2/tfs/projects/{projectId}/work-items", async (string projectId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];
-    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
-    var credential = sessions.GetTfsCredential(sessionId);
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
     if (credential is null) return Results.Unauthorized();
     var limit = int.TryParse(request.Query["limit"], out var parsedLimit) ? parsedLimit : 100;
     var offset = int.TryParse(request.Query["offset"], out var parsedOffset) ? parsedOffset : 0;
@@ -229,8 +242,10 @@ app.MapGet("/api/v2/tfs/projects/{projectId}/work-items", async (string projectI
 app.MapGet("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async (string projectId, int workItemId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
 {
     var sessionId = request.Cookies[sessionOptions.CookieName];
-    if (string.IsNullOrWhiteSpace(sessionId) || sessions.Get(sessionId) is null) return Results.Unauthorized();
-    var credential = sessions.GetTfsCredential(sessionId);
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.Forbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
     if (credential is null) return Results.Unauthorized();
     try
     {
