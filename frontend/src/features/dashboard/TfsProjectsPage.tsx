@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '../auth/AuthProvider';
 import {
   getTfsIterations,
   getTfsProject,
@@ -18,6 +19,7 @@ import {
   type TfsWorkItemType,
   type TfsWorkItem,
 } from '../auth/tfsProjectClient';
+import { canUseProjectManagementCapability } from '../projectManagement/projectManagementPermissions';
 
 type ProjectSheet = 'overview' | 'teams' | 'iterations' | 'work-items' | 'wbs' | 'charter' | 'stakeholder' | 'resource' | 'cost' | 'risk' | 'quality' | 'communication' | 'change_log';
 
@@ -86,10 +88,12 @@ function ToolMenuIcon({ kind }: { kind: ToolMenuIconKind }) {
 }
 
 function TfsTaskCreateModal({ project, workItems, item, onClose, onCreated }: { project: TfsProject; workItems: TfsWorkItem[]; item?: TfsWorkItemDetail; onClose: () => void; onCreated: (item: TfsWorkItemDetail) => void }) {
+  const auth = useAuth();
   const [form, setForm] = useState<TfsCreateWorkItemRequest>(() => item ? { workItemType: item.workItemType ?? 'Task', title: item.title ?? '', description: item.description ?? '', priority: item.priorityCode || 2, assignedTo: item.assignedTo ?? '', iterationPath: item.iterationPath ?? '', startDate: item.startDate?.slice(0, 10), finishDate: item.finishDate?.slice(0, 10), tags: item.tags ?? '', parentId: item.parentId ?? undefined } : { workItemType: 'Task', title: '', priority: 2 });
   const [workItemTypes, setWorkItemTypes] = useState<TfsWorkItemType[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canWrite = canUseProjectManagementCapability(auth.permissions, item ? 'canEdit' : 'canAdd');
   const assignees = [...new Set(workItems.map(item => item.assignedTo).filter((value): value is string => Boolean(value)))].sort();
   useEffect(() => {
     let active = true;
@@ -98,6 +102,10 @@ function TfsTaskCreateModal({ project, workItems, item, onClose, onCreated }: { 
   }, [project]);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canWrite) {
+      setError(item ? 'Tài khoản chưa được cấp quyền EDIT cho task.' : 'Tài khoản chưa được cấp quyền ADD cho task.');
+      return;
+    }
     if (!form.title.trim()) { setError('Vui lòng nhập tên công việc.'); return; }
     setSaving(true); setError(null);
     try {
@@ -136,6 +144,7 @@ type TfsPageKind = 'browser' | 'management' | 'tasks';
 const projectManagementStorageKey = 'projectmanagement.lastProject';
 
 export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 'browser' }: { initialSheet?: ProjectSheet; pageKind?: TfsPageKind }) {
+  const auth = useAuth();
   const targetMode = (import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev';
   const progressMode = pageKind === 'tasks' || initialSheet === 'wbs';
   const [projects, setProjects] = useState<TfsProject[]>([]);
@@ -168,9 +177,10 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   const [progressView, setProgressView] = useState<string>('list');
   const [ganttCellWidth, setGanttCellWidth] = useState(30);
   const projectRequestRef = useRef(0);
+  const canEditTfsTask = useMemo(() => canUseProjectManagementCapability(auth.permissions, 'canEdit'), [auth.permissions]);
 
   useEffect(() => {
-    if (!toolsOpen && !workItemDetail && !notice && !deleteTask) return;
+    if (!toolsOpen && !workItemDetail && !workItemDetailLoading && !notice && !deleteTask && !createTaskOpen && !editTask) return;
 
     function handlePointerDown(event: MouseEvent) {
       const target = event.target;
@@ -179,8 +189,12 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
+      projectRequestRef.current += 1;
       setToolsOpen(false);
       setWorkItemDetail(null);
+      setWorkItemDetailLoading(false);
+      setCreateTaskOpen(false);
+      setEditTask(null);
       setNotice(null);
       setDeleteTask(null);
     }
@@ -191,7 +205,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [deleteTask, notice, toolsOpen, workItemDetail]);
+  }, [createTaskOpen, deleteTask, editTask, notice, toolsOpen, workItemDetail, workItemDetailLoading]);
 
   useEffect(() => {
     const node = taskGridRef.current;
@@ -417,6 +431,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     const requestId = projectRequestRef.current;
     const projectKey = selected.collection + '/' + selected.id;
     setWorkItemDetailLoading(true);
+    setWorkItemDetail(null);
     setError(null);
     try {
       const detail = await getTfsWorkItem(selected, workItemId);
@@ -431,8 +446,13 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   }
 
   async function openEditTask(workItemId: number) {
+    if (!canEditTfsTask) {
+      showBoundaryNotice('Không có quyền sửa Task', 'Tài khoản hiện tại chưa được cấp quyền EDIT cho màn Tiến độ dự án. Không có dữ liệu nào được thay đổi.');
+      return;
+    }
     if (!selected || workItemDetailLoading) return;
     setWorkItemDetailLoading(true);
+    setEditTask(null);
     setError(null);
     try {
       setEditTask(await getTfsWorkItem(selected, workItemId));
@@ -615,6 +635,12 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   }
 
   function renderWorkItemModal() {
+    if (workItemDetailLoading) {
+      return <div className="work-item-modal" role="dialog" aria-modal="true" aria-labelledby="work-item-loading-title">
+        <button type="button" className="work-item-modal-backdrop" aria-label="Đóng chi tiết work item" onClick={() => { projectRequestRef.current += 1; setWorkItemDetailLoading(false); }} />
+        <article className="work-item-modal-panel work-item-loading-panel"><h3 id="work-item-loading-title">Đang tải chi tiết work item…</h3><p className="muted">Đang đọc dữ liệu từ TFS.</p></article>
+      </div>;
+    }
     if (!workItemDetail) return null;
     return <div className="work-item-modal" role="dialog" aria-modal="true" aria-labelledby="active-work-item-detail-title">
       <button type="button" className="work-item-modal-backdrop" aria-label="Đóng chi tiết work item" onClick={() => setWorkItemDetail(null)} />
@@ -637,7 +663,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
       {!loading && selected && <>
         {activeSheet === 'overview' && <>
           <div className="projectmanagement-summary"><div className="sb-proj"><div className="t" title={selected.name}>{selected.name}</div><div className="m">Collection: {selected.collection} · Trạng thái: {selected.state || '—'}</div></div><div className="sb-kpi"><div className="k">Teams</div><div className="v">{loadedSheets.has('teams') ? teams.length : '—'}</div></div><div className="sb-kpi exec"><div className="k">Work items</div><div className="v">{loadedSheets.has('work-items') ? workItemTotal : '—'}</div></div></div>
-          <div className="projectmanagement-state">Chưa có dữ liệu `pm-flow` từ Jarvis DB trong hệ thống mới. Phần dữ liệu TFS hiện tại chỉ hiển thị theo chế độ đọc.</div>
+          <div className="projectmanagement-state">Chưa có dữ liệu `pm-flow` từ Jarvis DB trong hệ thống mới. Phần dữ liệu TFS hiện tại chỉ hiển thị theo chế độ đọc. <a href="/projectmanagement-local">Mở PM đích (local)</a> để kiểm tra bảy bảng lõi bằng nguồn target đã cấu hình.</div>
         </>}
         {activeSheet === 'wbs' && <div className="projectmanagement-wbs-host">{renderSheetContent()}</div>}
       </>}
@@ -735,7 +761,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
         {selected && <>
           <div className="projectmanagement-head"><div><p className="eyebrow">{progressMode ? 'Theo dõi tiến độ' : 'Dự án đang chọn'}</p><h3>{selected.name}</h3><p className="muted">{selected.description || 'Chưa có mô tả từ TFS.'}</p></div><span className="project-status-chip">{selected.state ?? 'unknown'}</span></div>
           <div className="project-summary"><div><span>Collection</span><strong>{selected.collection}</strong></div><div><span>Project ID</span><strong className="break-all">{selected.id}</strong></div></div>
-          <div className="pm-sheets" role="tablist" aria-label="Project management sheets">{sheets.filter(sheet => !progressMode || sheet.key === 'wbs').map(sheet => <button key={sheet.key} type="button" role="tab" aria-selected={activeSheet === sheet.key} className={'pm-sheet-tab' + (activeSheet === sheet.key ? ' active' : '')} disabled={!sheet.available} title={sheet.reason} onClick={() => changeSheet(sheet.key)}>{sheet.label}{sheet.key !== 'overview' && sheet.available && loadedSheets.has(sheet.key) && <span className="st-dot s-done" />}</button>)}</div>
+          <div className="pm-sheets" role="tablist" aria-label="Project management sheets">{sheets.filter(sheet => !progressMode || sheet.key === 'wbs').map(sheet => <button key={sheet.key} type="button" role="tab" aria-selected={activeSheet === sheet.key} aria-disabled={!sheet.available} className={'pm-sheet-tab' + (activeSheet === sheet.key ? ' active' : '') + (!sheet.available ? ' unavailable' : '')} title={sheet.available ? sheet.label : `${sheet.label}: ${sheet.reason}`} onClick={() => changeSheet(sheet.key)}>{sheet.label}{sheet.key !== 'overview' && sheet.available && loadedSheets.has(sheet.key) && <span className="st-dot s-done" />}</button>)}</div>
           <div className="project-sheet-content">{renderSheetContent()}</div>
           {selected.url && <a className="project-api-link" href={selected.url} target="_blank" rel="noreferrer">Mở project API URL</a>}
         </>}

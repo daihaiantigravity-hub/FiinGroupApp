@@ -8,6 +8,13 @@
       "sha256": "22D70E8EEDF5DDBB89A32993D07168543183D891757F36A3DDC18807DAE57CD1",
       "destructive": false,
       "requiresApproval": true
+    },
+    {
+      "id": "004_project_management_pmbok_core",
+      "file": "../Migrations/004_project_management_pmbok_core.sql",
+      "sha256": "2B33148E642A986059B1E46D04B6ADF6F80BBFA8B8069C78EAF58A01F51F911C",
+      "destructive": false,
+      "requiresApproval": true
     }
   ]
 }

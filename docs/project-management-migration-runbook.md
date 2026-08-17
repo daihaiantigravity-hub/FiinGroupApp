@@ -16,6 +16,17 @@ The migration currently covers:
 - `pm_task_plan`;
 - `pm_project_summary`.
 
+Migration `004_project_management_pmbok_core` adds the target-only PMBOK read
+model:
+
+- `pm_project_charter`;
+- `pm_project_stakeholder`;
+- `pm_project_resource` and `pm_project_raci`;
+- `pm_project_risk` and `pm_cost_plan`;
+- `pm_quality_plan` and `pm_quality_dod`;
+- `pm_communication_plan`;
+- `pm_change_log`.
+
 It does not import Jarvis data and does not create a TFS-to-project mapping.
 
 ## Preconditions
@@ -49,3 +60,53 @@ SELECT COUNT(*) FROM pm_project_task;
 
 Expected initial row counts are zero. Do not run the Jarvis restore file or copy
 source business records into this database.
+
+## Optional synthetic fixture
+
+After the migration is verified, a disposable target database may be populated
+with the target-aligned synthetic fixture:
+
+```powershell
+Get-Content "D:\DEV\FiinGroupApp\backend\Database\Fixtures\project-management-target-fixture.sql" |
+  mariadb --host 127.0.0.1 --port <target-port> --user <target-user> --password
+```
+
+Confirm that the connection used by `mariadb` names exactly
+`FiinGroupApp.ProjectManagement`. The fixture is not executed by the API or
+database migrator. It is marked `FIXTURE-PM-*`, has no Jarvis/TFS mapping and
+is intended only to validate the target read-only workspace at
+`/projectmanagement-local`.
+
+Then, after migration `004`, apply the optional PMBOK fixture:
+
+```powershell
+Get-Content "D:\DEV\FiinGroupApp\backend\Database\Fixtures\project-management-pmbok-fixture.sql" |
+  mariadb --host 127.0.0.1 --port <target-port> --user <target-user> --password
+```
+
+## Enable the target read-only API
+
+Do not commit the connection string. Set it only in the local process that
+starts the API, after the database and fixture have been verified:
+
+```powershell
+$env:ProjectManagement__Enabled = "true"
+$env:ConnectionStrings__ProjectManagement = "Server=127.0.0.1;Port=<target-port>;Database=FiinGroupApp.ProjectManagement;User ID=<target-user>;Password=<local-secret>"
+dotnet run --project backend --launch-profile FiinGroupApp.Api
+```
+
+The separate `/projectmanagement-local` screen then calls the read-only
+workspace endpoint. The regular `/projectmanagement` and `/project-tasks`
+screens continue to use their approved TFS projection and do not infer a
+mapping from the synthetic fixture.
+
+Set the optional PMBOK flag only after migration `004` and its fixture have
+been verified:
+
+```powershell
+$env:ProjectManagement__PmbokEnabled = "true"
+```
+
+If the flag is enabled before migration `004`, the API returns the explicit
+`PROJECT_MANAGEMENT_PMBOK_SCHEMA_UNAVAILABLE` error instead of silently
+falling back to fabricated data.

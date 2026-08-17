@@ -64,7 +64,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         if (string.IsNullOrWhiteSpace(projectId)) throw new TfsProjectException("Project id is required.", "TFS_PROJECT_ID_REQUIRED", StatusCodes.Status400BadRequest);
         var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
         using var client = CreateClient(credential);
-        var response = await SendAsync(client, $"{collection}/_apis/projects/{Uri.EscapeDataString(projectId)}?api-version=2.0", cancellationToken);
+        var response = await SendAsync(client, $"{collection}/_apis/projects/{Uri.EscapeDataString(projectId)}?api-version=2.0", cancellationToken, allowNotFound: true);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         var project = await response.Content.ReadFromJsonAsync<TfsProjectDto>(cancellationToken: cancellationToken);
         return project is null ? null : Map(collection, project);
@@ -130,7 +130,7 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         if (workItemId <= 0) throw new TfsProjectException("Work item id is invalid.", "TFS_WORK_ITEM_ID_INVALID", StatusCodes.Status400BadRequest);
         var collection = ValidateCollection(string.IsNullOrWhiteSpace(collectionOverride) ? options.Collection : collectionOverride);
         using var client = CreateClient(credential);
-        var response = await SendAsync(client, collection + "/_apis/wit/workitems/" + workItemId + "?%24expand=relations&api-version=1.0", cancellationToken, "work item detail");
+        var response = await SendAsync(client, collection + "/_apis/wit/workitems/" + workItemId + "?%24expand=relations&api-version=1.0", cancellationToken, "work item detail", allowNotFound: true);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         var item = await response.Content.ReadFromJsonAsync<TfsWorkItemDto>(cancellationToken: cancellationToken);
         return item is null ? null : MapWorkItemDetail(item);
@@ -234,11 +234,11 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         return names.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpClient client, string relativeUrl, CancellationToken cancellationToken, string operation = "project API")
+    private async Task<HttpResponseMessage> SendAsync(HttpClient client, string relativeUrl, CancellationToken cancellationToken, string operation = "project API", bool allowNotFound = false)
     {
         try
         {
-            return EnsureResponse(await client.GetAsync(relativeUrl, cancellationToken), operation);
+            return EnsureResponse(await client.GetAsync(relativeUrl, cancellationToken), operation, allowNotFound);
         }
         catch (TfsProjectException) { throw; }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -442,8 +442,10 @@ public sealed class TfsProjectReader(TfsOptions options) : ITfsProjectReader
         }
     }
 
-    private static HttpResponseMessage EnsureResponse(HttpResponseMessage response, string operation)
+    private static HttpResponseMessage EnsureResponse(HttpResponseMessage response, string operation, bool allowNotFound = false)
     {
+        if (allowNotFound && response.StatusCode == HttpStatusCode.NotFound)
+            return response;
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             throw new TfsProjectException("TFS denied access to the " + operation + " request.", "TFS_PROJECTS_FORBIDDEN", StatusCodes.Status403Forbidden);
         if (response.StatusCode == HttpStatusCode.NotFound)

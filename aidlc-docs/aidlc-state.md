@@ -24,7 +24,7 @@
 
 - [~] Application Platform — React shell, target API health, TFS pilot session and read-only platform dashboard implemented
 - [~] Authentication and user profile — TFS target login plus in-memory pilot session/profile/permission contracts; persistent store and 2FA migration pending
-- [~] Project Management / TFS read-only — source-aligned React layouts for `projectmanagement` and `project-tasks`, plus project collections, project detail, teams, iterations, work items and first WBS projection via React/API v2; Jarvis DB-backed PMBOK, summary/resource data and mutation remain gated
+- [~] Project Management / TFS + target PM read-only — source-aligned React layouts for `projectmanagement` and `project-tasks`, target core workspace and optional target PMBOK workspace; source Jarvis-backed PMBOK, summary/resource data, mapping and mutation remain gated
 - [~] Wiki / documents / announcements — source-aligned React read-only routes with legacy list adapters; standalone `/documents` remains the source `[WIP]` boundary; target content API, permission mapping and mutations remain pending
 
 ## Migration decision
@@ -44,6 +44,12 @@
 - UI/backend correction decisions are documented in `construction/ui-backend-review-correction.md`.
 - TFS pilot permission provisioning is documented in `docs/tfs-permission-provisioning-runbook.md`.
 - Current blocker: Jarvis business database is not fully accessible; only source-code/migration baseline and approved TFS read projection can be advanced safely.
+- Target-only PM core and optional PMBOK read workspaces are available behind
+  the separate `/projectmanagement-local` route and the explicit
+  `ProjectManagement` store connection. They cover the target core tables and
+  source-defined PMBOK tables with optional synthetic fixtures; they do not
+  change the Jarvis/TFS mapping or unblock baseline, comments, attachments,
+  activity-log, approval or mutation work.
 
 ### OPERATIONS
 

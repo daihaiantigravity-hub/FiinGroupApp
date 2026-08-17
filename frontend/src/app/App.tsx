@@ -6,6 +6,7 @@ import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import ProfilePage from '../features/auth/ProfilePage';
 import DashboardPage from '../features/dashboard/DashboardPage';
 import TfsProjectsPage from '../features/dashboard/TfsProjectsPage';
+import LocalProjectManagementPage from '../features/projectManagement/LocalProjectManagementPage';
 import KnowledgePage from '../features/content/KnowledgePage';
 import DocumentsPage from '../features/content/DocumentsPage';
 
@@ -46,6 +47,7 @@ const tabLabels: Record<string, string> = {
   '/dashboard': '⌂ Dashboard',
   '/projectmanagement': 'Quản lý dự án',
   '/project-tasks': 'Tiến độ dự án',
+  '/projectmanagement-local': 'PM đích (local)',
   '/wiki': 'Wiki nội bộ',
   '/announcements': 'Thông báo & Tài liệu',
   '/documents': 'Tài liệu',
@@ -57,6 +59,7 @@ function TargetPage({ path }: { path: string }) {
     case '/dashboard': return <ProtectedRoute><DashboardPage /></ProtectedRoute>;
     case '/projectmanagement': return <ProtectedRoute><TfsProjectsPage pageKind="management" /></ProtectedRoute>;
     case '/project-tasks': return <ProtectedRoute><TfsProjectsPage initialSheet="wbs" pageKind="tasks" /></ProtectedRoute>;
+    case '/projectmanagement-local': return <ProtectedRoute><LocalProjectManagementPage /></ProtectedRoute>;
     case '/wiki': return <ProtectedRoute><KnowledgePage kind="wiki" /></ProtectedRoute>;
     case '/announcements': return <ProtectedRoute><KnowledgePage kind="announcements" /></ProtectedRoute>;
     case '/documents': return <ProtectedRoute><DocumentsPage /></ProtectedRoute>;
@@ -205,7 +208,7 @@ export default function App() {
 
   const projectEntries: SourceEntry[] = [
     { label: 'Dashboard CEO' }, { label: 'Khách hàng' }, { label: 'Phụ lục/Hợp đồng' }, { label: 'Phân bổ CPBH' },
-    { label: 'Quản lý dự án', to: '/projectmanagement' }, { label: 'Tiến độ dự án', to: '/project-tasks' }, { label: 'Tổng hợp dự án' },
+    { label: 'Quản lý dự án', to: '/projectmanagement' }, { label: 'Tiến độ dự án', to: '/project-tasks' }, { label: 'PM đích (local)', to: '/projectmanagement-local' }, { label: 'Tổng hợp dự án' },
     { label: 'PDCA & Đề xuất' }, { label: 'Chi phí dự án' }, { label: 'Danh sách Task Plan' }, { label: 'KPI Doanh thu' },
   ];
 

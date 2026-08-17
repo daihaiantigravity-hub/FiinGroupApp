@@ -37,6 +37,7 @@ var dashboardOptions = new DashboardOptions
 var projectManagementOptions = new ProjectManagementOptions
 {
     Enabled = builder.Configuration.GetValue<bool>("ProjectManagement:Enabled"),
+    PmbokEnabled = builder.Configuration.GetValue<bool>("ProjectManagement:PmbokEnabled"),
     ConnectionString = builder.Configuration.GetConnectionString("ProjectManagement")
 };
 if (dashboardOptions.LegacyStatsEnabled && string.IsNullOrWhiteSpace(dashboardOptions.ConnectionString))
@@ -348,6 +349,38 @@ app.MapGet("/api/v2/project-management/projects/{projectId:int}/tasks", async (i
     {
         var tasks = await reader.GetTasksAsync(projectId, cancellationToken);
         return Results.Ok(new { success = true, data = tasks });
+    }
+    catch (ProjectManagementStoreException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/project-management/projects/{projectId:int}/workspace", async (int projectId, HttpRequest request, ITargetSessionStore sessions, IProjectManagementReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    try
+    {
+        var workspace = await reader.GetWorkspaceAsync(projectId, cancellationToken);
+        return Results.Ok(new { success = true, data = workspace });
+    }
+    catch (ProjectManagementStoreException exception)
+    {
+        return Results.Json(new { success = false, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapGet("/api/v2/project-management/projects/{projectId:int}/pmbok", async (int projectId, HttpRequest request, ITargetSessionStore sessions, IProjectManagementReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanRead(authenticated, "projectmanagement", "project-tasks")) return TfsAuthorization.Forbidden();
+    try
+    {
+        var pmbok = await reader.GetPmbokWorkspaceAsync(projectId, cancellationToken);
+        return Results.Ok(new { success = true, data = pmbok });
     }
     catch (ProjectManagementStoreException exception)
     {

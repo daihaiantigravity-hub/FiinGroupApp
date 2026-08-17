@@ -1,5 +1,46 @@
 # AI-DLC Audit Log
 
+## 2026-08-17 — Target PMBOK read slice
+
+- Re-read the trusted source migrations `090`–`094` and the PMBOK route
+  queries for charter, stakeholder, resource/RACI, risk, cost, quality/DoD,
+  communication and change data.
+- Added target migration `004_project_management_pmbok_core` and its checksum
+  manifest entry without changing migration `003` or any Jarvis file.
+- Added the independently gated read-only PMBOK endpoint and on-demand UI
+  panels with explicit schema-unavailable behavior when migration `004` is not
+  present.
+- Added a separate synthetic PMBOK fixture; it does not import source data,
+  create TFS mappings or enable business mutations/approval workflows.
+- Target backend isolated build passed with 0 warnings and 0 errors; frontend
+  tests/build passed 13/13 and production build succeeded.
+
+## 2026-08-17 — Target PM core workspace read slice
+
+- Revalidated the target `003_project_management_core` schema against the
+  source PM table inventory and extended the repository contract to read the
+  seven target core tables in one project workspace.
+- Added `GET /api/v2/project-management/projects/{projectId}/workspace` with
+  the existing authenticated PM read permission and explicit not-found/query
+  error codes.
+- Added a separate `/projectmanagement-local` read-only UI for WBS,
+  assignees, dependencies, task field history, weekly plans and summaries.
+- Added a manually applied, target-only synthetic fixture marked
+  `FIXTURE-PM-*`; it does not alter Jarvis, TFS or the approved mapping boundary.
+- Kept PMBOK, baseline, comments, attachments, activity log and all business
+  mutations gated because their target schema/mapping/permission decisions are
+  still absent.
+- Frontend tests/build passed; isolated backend build passed with 0 warnings and
+  0 errors; existing backend tests passed 40/40.
+
+## 2026-08-17 — Project-management TFS detail hardening
+
+- Added a pure permission helper and tests for the target API's ACCESS + ADD/EDIT rule.
+- Kept unavailable PMBOK sheets clickable so they show the explicit migration boundary.
+- Added a visible work-item detail loading state and guarded edit attempts without EDIT permission.
+- Preserved 404 responses for missing TFS projects and work items so the API can return specific not-found error codes.
+- Frontend tests/build and the existing 40 backend tests passed; no files under `FiinGroup.Jarvis` were changed.
+
 ## 2026-08-14 — TFS Work Item Type discovery checkpoint
 
 - Added read-only `GET /api/v2/tfs/projects/{projectId}/work-item-types` based on the source Jarvis TFS client contract.

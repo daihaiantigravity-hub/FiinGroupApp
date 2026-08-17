@@ -10,6 +10,7 @@ vite.config.d.ts
 # .NET
 bin/
 obj/
+.verify/
 *.user
 *.suo
 

@@ -62,3 +62,35 @@ Target đã có schema/repository read contract ban đầu cho `pm_project` và
 `pm_project_task`; contract này chỉ hoạt động khi `ProjectManagement:Enabled=true`
 và có connection string riêng. Nó chưa được nối vào TFS project selector vì
 `pm_project.id_project` chưa được phê duyệt là mapping với TFS project GUID.
+
+## Target-only read workspace — 2026-08-17
+
+The target PM repository now exposes an explicit read-only workspace endpoint:
+
+`GET /api/v2/project-management/projects/{projectId}/workspace`
+
+The workspace joins only the seven tables already present in target migration
+`003_project_management_core`: project, task, assignee, dependency, task log,
+weekly plan and project summary. The UI is intentionally a separate
+`/projectmanagement-local` screen so it cannot be mistaken for the TFS project
+selector. It uses the same authenticated PM read permission and does not write
+TFS, Jarvis or the target business store.
+
+The optional target-aligned fixture is synthetic and disposable. Its rows are
+not a migration snapshot, do not prove a TFS mapping and must not be used to
+enable progress, baseline, comments, attachments, PMBOK or other mutations.
+Baseline, comments/attachments, activity log and PMBOK tables remain outside
+the target schema and remain gated.
+
+## Target-only PMBOK read slice — 2026-08-17
+
+Migration `004_project_management_pmbok_core` and
+`GET /api/v2/project-management/projects/{projectId}/pmbok` add an explicit
+read-only target model for the source-defined PMBOK tables. The endpoint is
+independently gated by `ProjectManagement:PmbokEnabled` and returns an explicit
+schema-unavailable error when migration `004` has not been applied.
+
+The `/projectmanagement-local` screen loads PMBOK on demand and displays the
+synthetic marker/boundary. This is a target validation read model, not a claim
+that Jarvis PMBOK data has been migrated. Approval workflow, CRUD, baseline,
+comments, attachments, activity log and TFS mapping remain unavailable.

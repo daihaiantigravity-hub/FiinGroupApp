@@ -53,3 +53,36 @@ production. Sau khi test phải xóa database disposable theo runbook của môi
 - Không bật các nút progress, baseline, delete, import/export chỉ vì fixture có dữ liệu.
 - Khi chuyển business store thật, phải có mapping project, DTO, permission matrix,
   source query snapshot và rollback note riêng theo AI-DLC.
+
+## Target-aligned workspace fixture
+
+The first fixture file predates the target migration and intentionally creates
+`FiinGroupApp.ProjectManagementFixture`; it is not compatible with the target
+reader because its project primary key is `id_project`. For the target API/UI,
+use:
+
+`backend/Database/Fixtures/project-management-target-fixture.sql`
+
+This second fixture assumes migration `003_project_management_core` has already
+been applied to the explicitly confirmed `FiinGroupApp.ProjectManagement`
+database. It inserts only synthetic rows marked `FIXTURE-PM-*` and covers all
+seven target core tables: project, task, assignee, dependency, task log, weekly
+plan and project summary. It is repeatable on a disposable target database and
+does not create a TFS mapping. The target screen is available at
+`/projectmanagement-local` and is read-only.
+
+The fixture SQL deletes only rows carrying its own `FIXTURE-PM-*` project marker
+before reinserting them. Review the target database name before running it; do
+not use it against Jarvis or production.
+
+## Optional PMBOK fixture
+
+After migration `004_project_management_pmbok_core` is applied and the core
+fixture has created project rows `9901`/`9902`, the PMBOK fixture can be applied:
+
+`backend/Database/Fixtures/project-management-pmbok-fixture.sql`
+
+It fills only target synthetic rows for charter, stakeholders, resources/RACI,
+risk, cost, quality/DoD, communication and change log. The API exposes these
+rows only when `ProjectManagement:PmbokEnabled=true`; all PMBOK operations are
+read-only in this slice.

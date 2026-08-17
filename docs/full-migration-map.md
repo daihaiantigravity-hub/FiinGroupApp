@@ -14,6 +14,11 @@ The target currently contains the application platform, authentication, TFS
 project-management projection and the first content adapters. A full conversion
 therefore must be executed as module batches; it is not a safe file-copy task.
 
+The target now also contains an explicitly gated, target-only PM core/PMBOK
+read model with disposable synthetic fixtures. This supports UI/API contract
+validation; it is not a source business-data migration and does not remove the
+database snapshot, mapping or permission blockers below.
+
 ## Module order
 
 | Batch | Source scope | React target | .NET target | Data dependency | Risk |
