@@ -149,16 +149,22 @@ API. It does not write to the inaccessible Jarvis database and does not claim
 to replace the source PMBOK task model.
 
 Creation is disabled by default. It requires both Tfs:WriteEnabled=true and
-the authenticated user's ADD permission for project-tasks or projectmanagement.
-The permission provisioner grants this only when called with --allow-add true;
-the default remains ACCESS, VIEW only. Update, delete, progress, baseline,
+an authenticated TFS session. The target sends the work-item request with that
+session's TFS credential, so TFS remains the final authority for the account's
+project ADD/EDIT permission; the app no longer drops a valid TFS permission
+because the separate target role lacks duplicated ADD/EDIT rows. Non-TFS/local
+target sessions still use the permission provisioner and `--allow-add` /
+`--allow-edit`. TFS delete is a soft-remove to `Removed`; progress, baseline,
 dependency and PMBOK persistence remain disabled until their source contracts
 and data stores are approved.
 
-The source-like Sửa Task and Xóa Task controls are visible in the task grid,
-but currently open an explicit boundary notice and do not send a mutation.
+The source-like Sửa Task and Xóa Task controls are visible in the task grid.
+Sửa Task uses a revision-guarded TFS update, while Xóa Task soft-removes the
+TFS work item by setting `System.State=Removed`; neither operation writes
+Jarvis DB.
 
-Sửa Task is now a separately gated direct-TFS update using a revision guard. Xóa Task remains disabled and opens an explicit boundary notice.
+Sửa Task is a separately gated direct-TFS update using a revision guard. Xóa
+Task is a separately gated direct-TFS soft-remove using the same revision guard.
 
 ## Fixture and current mutation boundary — 2026-08-14
 
@@ -169,7 +175,7 @@ The fixture is not loaded by the API. It exists only for local schema/WBS mappin
 checks; the running UI continues to read project/team/iteration/work-item data
 from TFS and does not pretend that fixture rows are production data.
 
-Current behavior is therefore intentionally split: TFS work-item create/edit is
-feature-flagged and permission-gated, while Jarvis business-store operations such
-as delete, progress audit, baseline, dependency persistence, import/export and
-PMBOK sheets remain outside this slice.
+Current behavior is therefore intentionally split: TFS work-item create/edit/
+soft-remove is feature-flagged and permission-gated, while Jarvis business-store
+operations such as delete linkage cleanup, progress audit, baseline, dependency
+persistence, import/export and PMBOK sheets remain outside this slice.

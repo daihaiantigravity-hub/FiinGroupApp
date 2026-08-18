@@ -83,6 +83,47 @@ public sealed class TfsAuthorizationTests
     }
 
     [Fact]
+    public void Tfs_session_exposes_read_and_feature_flagged_add_and_edit()
+    {
+        var permissions = TfsAuthorization.CreateTfsSessionPermissions(writeEnabled: true);
+
+        Assert.True(permissions.Forms["project-tasks"].CanAccess);
+        Assert.True(permissions.Forms["project-tasks"].CanView);
+        Assert.True(permissions.Forms["project-tasks"].CanAdd);
+        Assert.True(permissions.Forms["project-tasks"].CanEdit);
+        Assert.False(permissions.Forms["pm-projects"].CanAdd);
+    }
+
+    [Fact]
+    public void Tfs_session_does_not_expose_add_when_write_flag_is_off()
+    {
+        var permissions = TfsAuthorization.CreateTfsSessionPermissions(writeEnabled: false);
+
+        Assert.True(permissions.Forms["project-tasks"].CanView);
+        Assert.False(permissions.Forms["project-tasks"].CanAdd);
+        Assert.False(permissions.Forms["project-tasks"].CanEdit);
+    }
+
+    [Fact]
+    public void Mapped_tfs_user_keeps_module_boundary_and_receives_add_capability()
+    {
+        var user = new AuthenticatedUser(
+            new UserProfile(Guid.NewGuid(), "alice", "Alice", null, []),
+            new PermissionSet(
+                new Dictionary<string, PermissionFlags>
+                {
+                    ["project-tasks"] = new(true, true, false, false, false, false, false, false, false, false)
+                },
+                new HashSet<string>()));
+
+        var result = TfsAuthorization.GrantTfsWriteCapability(user, writeEnabled: true);
+
+        Assert.True(TfsAuthorization.CanCreate(result, "project-tasks"));
+        Assert.True(TfsAuthorization.CanEdit(result, "project-tasks"));
+        Assert.False(result.Permissions.Forms.ContainsKey("projectmanagement"));
+    }
+
+    [Fact]
     public async Task Invalid_tfs_base_url_is_rejected_before_network_call()
     {
         var reader = new TfsProjectReader(new TfsOptions { Enabled = true, BaseUrl = "not-a-url" });
@@ -109,7 +150,7 @@ public sealed class TfsAuthorizationTests
             new TfsSessionCredential("alice", "DOMAIN", "password"),
             "project-id",
             "Collection",
-            new TfsCreateWorkItemRequest("Task", "New task", null, null, null, null, null, null, null, null),
+            new TfsCreateWorkItemRequest("Task", "New task", null, null, null, null, null, null, null, null, null, null, null, null, null),
             CancellationToken.None));
 
         Assert.Equal("TFS_WRITE_DISABLED", exception.Code);
@@ -131,11 +172,55 @@ public sealed class TfsAuthorizationTests
             "project-id",
             42,
             "Collection",
-            new TfsUpdateWorkItemRequest(1, "Updated task", null, null, null, null, null, null, null, null),
+            new TfsUpdateWorkItemRequest(1, "Updated task", null, null, null, null, null, null, null, null, null, null, null, null, null),
             CancellationToken.None));
 
         Assert.Equal("TFS_WRITE_DISABLED", exception.Code);
         Assert.Equal(403, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task Remove_is_rejected_before_network_call_when_tfs_writes_are_disabled()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            WriteEnabled = false
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.RemoveWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            42,
+            "Collection",
+            7,
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WRITE_DISABLED", exception.Code);
+        Assert.Equal(403, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task Remove_rejects_invalid_revision_before_network_call()
+    {
+        var reader = new TfsProjectReader(new TfsOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            WriteEnabled = true
+        });
+
+        var exception = await Assert.ThrowsAsync<TfsProjectException>(() => reader.RemoveWorkItemAsync(
+            new TfsSessionCredential("alice", "DOMAIN", "password"),
+            "project-id",
+            42,
+            "Collection",
+            0,
+            CancellationToken.None));
+
+        Assert.Equal("TFS_WORK_ITEM_REVISION_INVALID", exception.Code);
+        Assert.Equal(400, exception.StatusCode);
     }
 
     [Fact]
@@ -173,7 +258,7 @@ public sealed class TfsAuthorizationTests
             "project-id",
             42,
             "Collection",
-            new TfsUpdateWorkItemRequest(0, "Updated task", null, null, null, null, null, null, null, null),
+            new TfsUpdateWorkItemRequest(0, "Updated task", null, null, null, null, null, null, null, null, null, null, null, null, null),
             CancellationToken.None));
 
         Assert.Equal("TFS_WORK_ITEM_REVISION_INVALID", exception.Code);
@@ -195,7 +280,7 @@ public sealed class TfsAuthorizationTests
             "project-id",
             42,
             "Collection",
-            new TfsUpdateWorkItemRequest(1, null, null, null, null, null, null, null, null, null),
+            new TfsUpdateWorkItemRequest(1, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
             CancellationToken.None));
 
         Assert.Equal("TFS_WORK_ITEM_UPDATE_EMPTY", exception.Code);

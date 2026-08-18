@@ -8,10 +8,11 @@ export type TfsProject = {
 };
 export type TfsTeam = { id: string; name: string; description: string | null; url: string | null };
 export type TfsIteration = { id: string; name: string; path: string | null; timeFrame: string | null; url: string | null };
-export type TfsWorkItemType = { name: string; referenceName: string | null; description: string | null; url: string | null };
-export type TfsWorkItem = { id: number; revision: number; title: string | null; workItemType: string | null; state: string | null; assignedTo: string | null; iterationPath: string | null; parentId: number | null; startDate: string | null; finishDate: string | null; targetDate: string | null; closedDate: string | null; statusCode: number; progress: number; plan: number; priorityCode: number; taskCode: string | null; product: string | null; createdBy: string | null; url: string | null; generatedFields?: Record<string, string> };
+export type TfsWorkItemType = { name: string; referenceName: string | null; description: string | null; url: string | null; states?: string[] };
+export type TfsWorkItem = { id: number; revision: number; title: string | null; workItemType: string | null; state: string | null; assignedTo: string | null; iterationPath: string | null; parentId: number | null; startDate: string | null; finishDate: string | null; targetDate: string | null; closedDate: string | null; statusCode: number; progress: number; plan: number; priorityCode: number; taskCode: string | null; product: string | null; createdBy: string | null; url: string | null; effort: number | null; predecessorIds: number[]; generatedFields?: Record<string, string> };
 export type TfsWorkItemDetail = TfsWorkItem & { description: string | null; createdDate: string | null; changedDate: string | null; priority: string | null; tags: string | null; history: string | null };
-export type TfsCreateWorkItemRequest = { workItemType?: string; title: string; description?: string; priority?: number; assignedTo?: string; iterationPath?: string; startDate?: string; finishDate?: string; tags?: string; parentId?: number };
+export type TfsWorkItemDependencyRequest = { predecessorId: number; dependencyType: number };
+export type TfsCreateWorkItemRequest = { workItemType?: string; title: string; description?: string; priority?: number; assignedTo?: string; iterationPath?: string; startDate?: string; finishDate?: string; tags?: string; parentId?: number | null; product?: string; state?: string; effort?: number; progress?: number; dependencies?: TfsWorkItemDependencyRequest[] };
 export type TfsUpdateWorkItemRequest = TfsCreateWorkItemRequest & { revision: number };
 
 type TfsProjectResponse<T = TfsProject> = { data?: T; error?: { code?: string; message?: string; detail?: string; errorId?: string } };
@@ -81,5 +82,17 @@ export async function updateTfsWorkItem(project: TfsProject, workItemId: number,
   if (!response.ok) throw await readError(response, 'Unable to update TFS work item.');
   const payload = await response.json() as TfsProjectResponse<TfsWorkItemDetail>;
   if (!payload.data) throw new Error('TFS updated work item is empty.');
+  return payload.data;
+}
+
+export async function removeTfsWorkItem(project: TfsProject, workItemId: number, revision: number): Promise<TfsWorkItemDetail> {
+  const query = new URLSearchParams({ collection: project.collection, revision: String(revision) });
+  const response = await fetch('/api/v2/tfs/projects/' + encodeURIComponent(project.id) + '/work-items/' + workItemId + '?' + query, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) throw await readError(response, 'Unable to remove TFS work item.');
+  const payload = await response.json() as TfsProjectResponse<TfsWorkItemDetail>;
+  if (!payload.data) throw new Error('TFS removed work item is empty.');
   return payload.data;
 }

@@ -29,11 +29,14 @@ fresh permission snapshot, then test:
 3. Teams and Iterations can load for a selected project.
 4. No create/edit/delete control is enabled.
 
-## Optional TFS task-creation pilot
+## Optional local/target task-creation pilot
 
 Only enable this for the internal technical test. It grants ADD to the
-separate TFS_TASK_CREATOR role for the three project forms. It does not grant
-EDIT, DELETE, IMPORT, EXPORT or APPROVE.
+separate TFS_TASK_CREATOR role for non-TFS/local target sessions. A direct
+TFS-domain session does not need duplicated ADD/EDIT rows: when
+`Tfs:WriteEnabled=true`, the target forwards the request using the logged-in
+TFS credential and TFS decides whether the account may create or edit the item.
+It does not grant DELETE, IMPORT, EXPORT or APPROVE.
 
 ```powershell
 dotnet run -- `
@@ -43,9 +46,10 @@ dotnet run -- `
   --allow-add true
 ```
 
-The API must also be started with $env:Tfs__WriteEnabled = "true". The
-Thêm Task form then sends a direct TFS create request. It does not write to
-Jarvis DB. Keep the flag unset or false after testing.
+The API must also be started with $env:Tfs__WriteEnabled = "true" for a direct
+TFS-domain session. The Thêm Task form then sends a direct TFS create request.
+It does not write to Jarvis DB. Keep the flag unset or false after testing in
+environments where TFS writes are not intended.
 
 To test the source-like Sửa Task flow separately, provision EDIT explicitly:
 
@@ -59,7 +63,9 @@ dotnet run -- `
 
 The update uses the TFS revision returned by the detail endpoint. A stale
 revision is rejected by TFS instead of silently overwriting another user's
-change. Delete remains disabled.
+change. Direct TFS Xóa Task uses the same revision guard and changes the state
+to `Removed` rather than hard-deleting the work item; local target sessions
+remain delete-disabled.
 
 Verification query:
 

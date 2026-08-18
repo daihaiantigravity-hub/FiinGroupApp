@@ -1099,16 +1099,75 @@
 
 ## 2026-08-18 — TFS project context và PM target navigation
 
-- Nút `Mở PM đích` của trang `/projectmanagement` truyền `sourceProjectId` của
-  TFS project đang chọn; các tab PMBOK trước đây bị khóa nay mở đúng sheet
-  tương ứng trên target workspace.
-- PM target ưu tiên mapping `sourceProjectId` sau `projectId` và không còn
-  fallback sang project lưu gần nhất khi URL đã chỉ rõ context. Nếu chưa có
-  mapping, hiển thị thông báo rõ ràng thay vì mở nhầm project.
+- Nút `Mở PM đích` của trang `/projectmanagement` truyền `tfsProjectRef` của
+  TFS project đang chọn; các tab PMBOK trước đây bị khóa nay mở sheet tương
+  ứng trên target workspace khi đã có project target được chọn.
+- PM target chỉ tự chọn theo `projectId` target; khi URL có external source
+  context thì không fallback sang project lưu gần nhất. Nếu chưa có mapping,
+  hiển thị thông báo rõ ràng thay vì mở nhầm project.
 - Tách localStorage của TFS project (`projectmanagement.tfsProject`) và target
   project (`projectmanagement.targetProject`), tránh hai màn hình ghi đè lên
   nhau bằng hai định dạng ID khác nhau; vẫn đọc giá trị legacy hợp lệ.
 - Các công cụ đã có read API target (workload, critical path, baseline,
   activity log và export) từ `/project-tasks` chuyển thẳng sang PM target với
-  đúng `sourceProjectId` và tự mở panel tương ứng; thao tác đồng bộ/ghi TFS
+  đúng context project nguồn và tự mở panel tương ứng; thao tác đồng bộ/ghi TFS
   vẫn giữ boundary notice vì chưa có contract ghi an toàn.
+
+## 2026-08-18 — TFS/target mapping safety correction
+
+- Không dùng TFS project ID như `pm_project.id_project`: hai namespace chưa
+  được phê duyệt mapping trong migration contract. Context từ TFS nay truyền
+  bằng `tfsProjectRef`/tên project để hiển thị và không tự chọn target project.
+- Khi chưa có mapping, PM target giữ trạng thái chưa chọn và yêu cầu người dùng
+  chọn target đã xác định; không fallback về project lưu gần nhất.
+- Khi người dùng chọn target project trong context TFS, lựa chọn được lưu theo
+  `collection/id` của TFS để lần mở sau dùng đúng mapping thủ công đó.
+- PM target hiển thị banner context TFS với trạng thái `chưa mapping` hoặc
+  `đã dùng mapping`, giúp người dùng phân biệt rõ project nguồn và target.
+
+## 2026-08-18 — TFS task ADD capability correction
+
+- Xác định lỗi `Tài khoản chưa được cấp quyền ADD cho task`: phiên đăng nhập
+  TFS trước đây luôn nhận `PermissionSet` rỗng, nên React và API chặn trước khi
+  gửi request tới TFS; quyền ADD thật của tài khoản trên TFS không được dùng.
+- Phiên TFS nay nhận quyền đọc cho các form TFS và nhận capability ADD khi
+  `Tfs:WriteEnabled=true`; với user đã mapping vào target, chỉ hợp nhất ADD
+  trên form đã có ACCESS/VIEW, không mở rộng module ngoài boundary hiện hữu.
+- POST tạo task vẫn gửi credential TFS của chính phiên đăng nhập; TFS là lớp
+  quyết định cuối cùng nếu tài khoản không có quyền tạo trong project. Direct
+  TFS session cũng được dùng cho EDIT qua update có revision guard; DELETE và
+  ghi Jarvis DB vẫn bị khóa.
+- Profile Development và launch profile local được bật `Tfs:WriteEnabled=true`
+  để đúng với pilot tạo task hiện tại; môi trường khác vẫn phải cấu hình flag
+  tường minh. Đã thêm backend regression tests cho read/ADD và mapped-user
+  capability.
+
+## 2026-08-18 — TFS NTLM proxy bypass
+
+- Sau khi restart API, login TFS trả `TFS_UNAVAILABLE` vì process kế thừa
+  `HTTP_PROXY/HTTPS_PROXY=http://127.0.0.1:9`; TFS nội bộ ở
+  `192.168.1.40:8080` bị đẩy qua proxy không tồn tại.
+- Xác nhận endpoint TFS truy cập trực tiếp trả `401` và
+  `WWW-Authenticate: NTLM`, chứng minh network/TFS còn hoạt động; cấu hình
+  `HttpClientHandler` của cả authentication và project reader nay bypass proxy
+  để không gửi NTLM credential handshake qua proxy.
+
+## 2026-08-18 — TFS task EDIT capability correction
+
+- Đồng bộ capability EDIT cho phiên đăng nhập trực tiếp bằng TFS khi
+  `Tfs:WriteEnabled=true`, và hợp nhất EDIT cho mapped user đã có ACCESS/VIEW
+  trên form task; lỗi UI `Không có quyền sửa Task` không còn chặn trước khi
+  gửi request hợp lệ.
+- PUT update và TFS soft-remove đều dùng credential TFS với revision guard; TFS
+  là lớp xác nhận cuối cùng về quyền sửa, còn xóa liên kết Jarvis DB và các
+  mutation Jarvis khác vẫn bị khóa.
+
+## 2026-08-18 — TFS task soft-delete parity
+
+- Đối chiếu Jarvis `DELETE /api/project-tasks/:id`: source không hard-delete
+  mà cập nhật task và TFS sang `Removed`, đồng thời soft-delete row local.
+- Target bổ sung `DELETE /api/v2/tfs/projects/{projectId}/work-items/{id}`;
+  endpoint chỉ chuyển `System.State` sang `Removed` bằng credential TFS và
+  revision guard, không ghi Jarvis DB và không gọi hard-delete TFS.
+- Danh sách work item target loại các item đã `Removed`; UI xác nhận rõ đây là
+  xóa mềm trên TFS. Local/non-TFS target session vẫn không có nút mutation này.

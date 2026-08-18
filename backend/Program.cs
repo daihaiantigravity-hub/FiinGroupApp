@@ -100,7 +100,7 @@ app.MapPost("/api/v2/auth/login", async (LoginRequest request, IAuthService auth
             tfsCredential = result.Credential;
             var resolver = app.Services.GetService<ITfsIdentityResolver>();
             var mapped = resolver is null ? null : await resolver.ResolveAsync(result.Identity, cancellationToken);
-            if (mapped is not null) authenticated = mapped;
+            if (mapped is not null) authenticated = TfsAuthorization.GrantTfsWriteCapability(mapped, tfsOptions.WriteEnabled);
             else if (tfsOptions.RequireIdentityMapping)
                 throw new TfsAuthenticationException("TFS identity is not mapped to a FiinGroupApp user.", "TFS_IDENTITY_NOT_MAPPED", StatusCodes.Status403Forbidden);
             else authenticated = new AuthenticatedUser(result.User, result.Permissions);
@@ -318,6 +318,25 @@ app.MapPut("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async
     try
     {
         var workItem = await reader.UpdateWorkItemAsync(credential, projectId, workItemId, request.Query["collection"], workItemRequest, cancellationToken);
+        return Results.Ok(new { success = true, data = workItem });
+    }
+    catch (TfsProjectException exception)
+    {
+        return Results.Json(new { success = false, message = exception.Message, error = new { code = exception.Code, message = exception.Message } }, statusCode: exception.StatusCode);
+    }
+});
+app.MapDelete("/api/v2/tfs/projects/{projectId}/work-items/{workItemId:int}", async (string projectId, int workItemId, HttpRequest request, ITargetSessionStore sessions, ITfsProjectReader reader, CancellationToken cancellationToken) =>
+{
+    var sessionId = request.Cookies[sessionOptions.CookieName];
+    var authenticated = string.IsNullOrWhiteSpace(sessionId) ? null : sessions.Get(sessionId);
+    if (authenticated is null) return Results.Unauthorized();
+    if (!TfsAuthorization.CanEdit(authenticated, "project-tasks", "projectmanagement")) return TfsAuthorization.WriteForbidden();
+    var credential = sessions.GetTfsCredential(sessionId!);
+    if (credential is null) return Results.Unauthorized();
+    var revision = int.TryParse(request.Query["revision"].ToString(), out var parsedRevision) ? parsedRevision : 0;
+    try
+    {
+        var workItem = await reader.RemoveWorkItemAsync(credential, projectId, workItemId, request.Query["collection"], revision, cancellationToken);
         return Results.Ok(new { success = true, data = workItem });
     }
     catch (TfsProjectException exception)

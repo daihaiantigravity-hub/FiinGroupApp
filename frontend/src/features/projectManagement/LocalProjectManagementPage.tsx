@@ -71,6 +71,21 @@ function isLocalProjectAnalysis(value: string | null): value is LocalProjectAnal
 
 const LOCAL_PROJECT_STORAGE_KEY = 'projectmanagement.targetProject';
 const LEGACY_LOCAL_PROJECT_STORAGE_KEY = 'projectmanagement.lastProject';
+const TFS_PROJECT_MAPPING_KEY_PREFIX = 'projectmanagement.tfsMapping.';
+
+function tfsProjectMappingKey(projectRef: string) {
+  return `${TFS_PROJECT_MAPPING_KEY_PREFIX}${encodeURIComponent(projectRef)}`;
+}
+
+function readTfsProjectMapping(projectRef: string | null) {
+  if (!projectRef) return null;
+  try {
+    const value = Number(window.localStorage.getItem(tfsProjectMappingKey(projectRef)));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 import LocalProjectManagementFlow, { buildFlow } from './LocalProjectManagementFlow';
 import LocalProjectManagementGantt from './LocalProjectManagementGantt';
@@ -202,11 +217,18 @@ function TaskDetail({ item, workspace }: { item: ProjectManagementTaskDetails; w
 export default function LocalProjectManagementPage() {
   const [searchParams] = useSearchParams();
   const requestedProjectId = Number(searchParams.get('projectId')) || null;
+  // TFS and pm_project.id_project are different namespaces. Keep the TFS
+  // context for messaging until an approved mapping is supplied; never infer
+  // a target project from a TFS GUID or numeric ID.
+  const requestedTfsProjectRef = searchParams.get('tfsProjectRef');
+  const requestedTfsProjectName = searchParams.get('tfsProjectName');
   const requestedSourceProjectId = Number(searchParams.get('sourceProjectId')) || null;
+  const hasRequestedExternalProject = Boolean(requestedTfsProjectRef) || requestedSourceProjectId !== null;
   const requestedSheetParam = searchParams.get('sheet');
   const requestedSheet: LocalProjectSheet = isLocalProjectSheet(requestedSheetParam) ? requestedSheetParam : 'overview';
   const requestedAnalysisParam = searchParams.get('analysis');
   const requestedAnalysis: LocalProjectAnalysis | null = isLocalProjectAnalysis(requestedAnalysisParam) ? requestedAnalysisParam : null;
+  const requestedMappedProjectId = readTfsProjectMapping(requestedTfsProjectRef);
   const [lastProjectId] = useState<number | null>(() => {
     try {
       const storedValue = window.localStorage.getItem(LOCAL_PROJECT_STORAGE_KEY)
@@ -300,7 +322,7 @@ export default function LocalProjectManagementPage() {
       setProjects(result);
       setSelectedId(current => {
         if (requestedProjectId !== null) return result.some(project => project.id === requestedProjectId) ? requestedProjectId : null;
-        if (requestedSourceProjectId !== null) return result.find(project => project.sourceProjectId === requestedSourceProjectId)?.id ?? null;
+        if (hasRequestedExternalProject) return requestedMappedProjectId && result.some(project => project.id === requestedMappedProjectId) ? requestedMappedProjectId : null;
         if (lastProjectId && result.some(project => project.id === lastProjectId)) return lastProjectId;
         return current && result.some(project => project.id === current) ? current : null;
       });
@@ -310,14 +332,16 @@ export default function LocalProjectManagementPage() {
   useEffect(() => { loadProjects(); }, []);
 
   useEffect(() => {
-    if (requestedProjectId === null && requestedSourceProjectId === null) return;
+    if (requestedProjectId === null && !hasRequestedExternalProject) return;
     const requestedProject = requestedProjectId !== null
       ? projects.find(project => project.id === requestedProjectId)
-      : projects.find(project => project.sourceProjectId === requestedSourceProjectId);
+      : requestedMappedProjectId !== null
+        ? projects.find(project => project.id === requestedMappedProjectId)
+        : undefined;
     const nextId = requestedProject?.id ?? null;
     setSelectedId(current => current === nextId ? current : nextId);
     setActiveSheet(requestedSheet);
-  }, [projects, requestedProjectId, requestedSheet, requestedSourceProjectId]);
+  }, [hasRequestedExternalProject, projects, requestedMappedProjectId, requestedProjectId, requestedSheet]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -637,14 +661,15 @@ export default function LocalProjectManagementPage() {
   }, [activityPage, baselines, criticalPath, requestedAnalysis, workload]);
 
   return <section className={`projectmanagement local-pm-page pm-sheet-${activeSheet} pm-wbs-view-${wbsView}${requestedAnalysis ? ` pm-analysis-${requestedAnalysis}` : ''}`}>
-    <div className="projectmanagement-head"><div className="projectmanagement-head-left"><h1 className="projectmanagement-h1">Quản lý dự án</h1></div><div className="projectmanagement-proj"><label htmlFor="localPmProject">Dự án</label><select id="localPmProject" className="projectmanagement-select" value={selectedId ?? ""} onChange={event => { const nextId = Number(event.target.value) || null; setSelectedId(nextId); if (!nextId) { try { window.localStorage.removeItem(LOCAL_PROJECT_STORAGE_KEY); window.localStorage.removeItem(LEGACY_LOCAL_PROJECT_STORAGE_KEY); } catch { /* restricted storage */ } } setActiveSheet('overview'); }} disabled={loading || !filteredProjects.length}><option value="">— Chọn dự án —</option>{filteredProjects.map(project => <option key={project.id} value={project.id}>{projectManagementProjectLabel(project)}</option>)}</select></div></div>
+    <div className="projectmanagement-head"><div className="projectmanagement-head-left"><h1 className="projectmanagement-h1">Quản lý dự án</h1></div><div className="projectmanagement-proj"><label htmlFor="localPmProject">Dự án</label><select id="localPmProject" className="projectmanagement-select" value={selectedId ?? ""} onChange={event => { const nextId = Number(event.target.value) || null; setSelectedId(nextId); if (requestedTfsProjectRef) { try { if (nextId) window.localStorage.setItem(tfsProjectMappingKey(requestedTfsProjectRef), String(nextId)); else window.localStorage.removeItem(tfsProjectMappingKey(requestedTfsProjectRef)); } catch { /* restricted storage */ } } if (!nextId) { try { window.localStorage.removeItem(LOCAL_PROJECT_STORAGE_KEY); window.localStorage.removeItem(LEGACY_LOCAL_PROJECT_STORAGE_KEY); } catch { /* restricted storage */ } } setActiveSheet('overview'); }} disabled={loading || !filteredProjects.length}><option value="">— Chọn dự án —</option>{filteredProjects.map(project => <option key={project.id} value={project.id}>{projectManagementProjectLabel(project)}</option>)}</select></div></div>
+    {requestedTfsProjectRef && <div className={`local-pm-source-context${selectedId ? ' mapped' : ''}`}><strong>Context TFS</strong><span>{requestedTfsProjectName || requestedTfsProjectRef}</span><small>{selectedId ? 'Đã dùng mapping target đã xác nhận.' : 'Chưa có mapping target; chọn project đích trong bộ chọn bên trên.'}</small></div>}
     <nav className="pm-sheets source-pm-sheets" aria-label="Project management sheets" role="tablist">
       {SOURCE_PM_SHEETS.map(sheet => <button key={sheet.key} type="button" role="tab" aria-selected={activeSheet === sheet.key} className={`pm-sheet-tab${activeSheet === sheet.key ? ' active' : ''}`} onClick={() => openSheet(sheet.key)}>{sheet.label}{sheet.key !== 'overview' && <span className={`st-dot s-${flowStatuses[sheet.key === 'wbs' ? 'wbs' : sheet.key] ?? 'na'}`} aria-hidden="true" />}</button>)}
     </nav>
     {error && <p className="error">{error}</p>}
     {loading && <EmptySection text="Đang tải danh sách project đích…" />}
     {!loading && !projects.length && !error && <EmptySection text="Chưa có project đích. Có thể chạy migration rồi nạp fixture target-only theo runbook." />}
-    {!loading && projects.length > 0 && !selectedId && <EmptySection text={requestedSourceProjectId !== null ? `Chưa có project đích được liên kết với TFS project #${requestedSourceProjectId}.` : requestedProjectId !== null ? `Không tìm thấy project đích #${requestedProjectId}.` : 'Chọn dự án để xem dòng chảy quản lý dự án.'} />}
+    {!loading && projects.length > 0 && !selectedId && <EmptySection text={requestedTfsProjectRef ? `Chưa có mapping project đích cho TFS project ${requestedTfsProjectName ? `"${requestedTfsProjectName}"` : ''} (${requestedTfsProjectRef}). Chọn project target bên trên nếu bạn đã xác định mapping; lựa chọn sẽ được lưu cho lần sau.` : requestedSourceProjectId !== null ? `Chưa có mapping được phê duyệt cho source project #${requestedSourceProjectId}.` : requestedProjectId !== null ? `Không tìm thấy project đích #${requestedProjectId}.` : 'Chọn dự án để xem dòng chảy quản lý dự án.'} />}
     {workspaceLoading && <EmptySection text="Đang tải toàn bộ workspace PM…" />}
     {workspace && !workspaceLoading && <>
       <div className="projectmanagement-summary"><div className="sb-proj"><div className="t" title={projectTitle}>{projectTitle}</div><div className="m">PM: {workspace.project.projectManager || '—'} · Ngân sách: {formatMoney(workspace.project.budget)}</div></div><div className="sb-kpi"><div className="k">Hồ sơ PMBOK</div><div className="v">{setupPercent}<small>%</small></div><div className="bar"><i style={{ width: `${setupPercent}%` }} /></div></div><div className="sb-kpi exec"><div className="k">Tiến độ thực thi</div><div className="v">{executionPercent}<small>%</small></div><div className="bar"><i style={{ width: `${executionPercent}%` }} /></div></div></div>

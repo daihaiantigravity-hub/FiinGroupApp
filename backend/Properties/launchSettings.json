@@ -11,7 +11,7 @@
         "Tfs__BaseUrl": "http://192.168.1.40:8080/tfs",
         "Tfs__Collection": "FiinGroup",
         "Tfs__RequireIdentityMapping": "false",
-        "Tfs__WriteEnabled": "false"
+        "Tfs__WriteEnabled": "true"
       }
     }
   }

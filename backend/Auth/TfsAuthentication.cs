@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FiinGroupApp.Api.Tfs;
 
 namespace FiinGroupApp.Api.Auth;
 
@@ -46,6 +47,9 @@ public sealed class TfsAuthenticationService(TfsOptions options) : ITfsAuthentic
             Credentials = credentialCache,
             PreAuthenticate = false,
             UseCookies = false,
+            // TFS is an internal NTLM endpoint. Do not send the credential
+            // handshake through a developer-machine HTTP proxy.
+            UseProxy = false,
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
         };
@@ -66,7 +70,7 @@ public sealed class TfsAuthenticationService(TfsOptions options) : ITfsAuthentic
             var user = new UserProfile(GuidFromTfsId(id), login, fullName, null, []);
             return new TfsLoginResult(
                 user,
-                new PermissionSet(new Dictionary<string, PermissionFlags>(), new HashSet<string>()),
+                TfsAuthorization.CreateTfsSessionPermissions(options.WriteEnabled),
                 new TfsIdentity(username, domain, identity.UniqueName ?? string.Empty, fullName, id),
                 new TfsSessionCredential(username, domain, request.Password));
         }
