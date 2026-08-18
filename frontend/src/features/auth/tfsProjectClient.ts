@@ -14,11 +14,14 @@ export type TfsWorkItemDetail = TfsWorkItem & { description: string | null; crea
 export type TfsCreateWorkItemRequest = { workItemType?: string; title: string; description?: string; priority?: number; assignedTo?: string; iterationPath?: string; startDate?: string; finishDate?: string; tags?: string; parentId?: number };
 export type TfsUpdateWorkItemRequest = TfsCreateWorkItemRequest & { revision: number };
 
-type TfsProjectResponse<T = TfsProject> = { data?: T; error?: { code?: string; message?: string } };
+type TfsProjectResponse<T = TfsProject> = { data?: T; error?: { code?: string; message?: string; detail?: string; errorId?: string } };
 
 async function readError(response: Response, fallback: string): Promise<Error> {
   const payload = await response.json().catch(() => ({})) as TfsProjectResponse;
-  return new Error((payload.error?.message ?? fallback) + ' [' + (payload.error?.code ?? response.status) + ']');
+  const message = payload.error?.message ?? fallback;
+  const detail = payload.error?.detail && payload.error.detail !== message ? ` — ${payload.error.detail}` : '';
+  const errorId = payload.error?.errorId ? ` (errorId: ${payload.error.errorId})` : '';
+  return new Error(`${message}${detail} [${payload.error?.code ?? response.status}]${errorId}`);
 }
 
 export async function getTfsProjects(): Promise<TfsProject[]> {

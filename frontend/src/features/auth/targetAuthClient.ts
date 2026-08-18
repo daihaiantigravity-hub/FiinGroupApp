@@ -1,7 +1,18 @@
 import type { ActionPermissionMap, AuthUser, LoginOutcome, PermissionMap } from './authTypes';
 import type { LegacyDashboardStats } from './legacyAuthClient';
 
-type TargetResponse = { user?: Record<string, unknown>; permissions?: { forms?: PermissionMap; actions?: unknown } } & Record<string, unknown>;
+type TargetResponse = { user?: Record<string, unknown>; permissions?: { forms?: PermissionMap; actions?: unknown }; error?: Record<string, unknown> } & Record<string, unknown>;
+
+function formatTargetError(payload: TargetResponse, fallback: string, status: number) {
+  const nestedError = payload.error;
+  const message = typeof nestedError?.message === 'string'
+    ? nestedError.message
+    : typeof payload.message === 'string' ? payload.message : fallback;
+  const detail = typeof nestedError?.detail === 'string' && nestedError.detail !== message ? ` — ${nestedError.detail}` : '';
+  const code = typeof nestedError?.code === 'string' ? ` [${nestedError.code}]` : ` [${status}]`;
+  const errorId = typeof nestedError?.errorId === 'string' ? ` (errorId: ${nestedError.errorId})` : '';
+  return `${message}${detail}${code}${errorId}`;
+}
 
 function mapUser(value: unknown): AuthUser {
   const user = (value ?? {}) as Record<string, unknown>;
@@ -18,10 +29,7 @@ export async function loginAgainstTarget(username: string, password: string, aut
   const response = await fetch('/api/v2/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ username, password, authProvider, domain }) });
   const payload = await response.json().catch(() => ({})) as TargetResponse;
   if (!response.ok) {
-    const nestedError = payload.error as Record<string, unknown> | undefined;
-    const code = typeof nestedError?.code === 'string' ? ` [${nestedError.code}]` : '';
-    const message = typeof nestedError?.message === 'string' ? nestedError.message : payload.message ?? payload.error;
-    throw new Error(`${String(message ?? `Target login failed: ${response.status}`)}${code}`);
+    throw new Error(formatTargetError(payload, `Target login failed: ${response.status}`, response.status));
   }
   const permissions = payload.permissions?.forms ?? {};
   return { outcome: { kind: 'authenticated', token: '', user: mapUser(payload.user) }, permissions, actionPermissions: mapActions(payload.permissions?.actions) };
@@ -31,7 +39,7 @@ export async function restoreTargetSession(): Promise<{ user: AuthUser; permissi
   const response = await fetch('/api/v2/auth/session', { credentials: 'include' });
   if (response.status === 401) return null;
   const payload = await response.json().catch(() => ({})) as TargetResponse;
-  if (!response.ok) throw new Error(String(payload.message ?? `Target session failed: ${response.status}`));
+  if (!response.ok) throw new Error(formatTargetError(payload, `Target session failed: ${response.status}`, response.status));
   return { user: mapUser(payload.user), permissions: payload.permissions?.forms ?? {}, actionPermissions: mapActions(payload.permissions?.actions) };
 }
 
@@ -43,8 +51,7 @@ export async function targetDashboardStats(): Promise<LegacyDashboardStats> {
   const response = await fetch('/api/v2/dashboard/stats', { credentials: 'include' });
   const payload = await response.json().catch(() => ({})) as TargetResponse;
   if (!response.ok) {
-    const nestedError = payload.error as Record<string, unknown> | undefined;
-    throw new Error(String(nestedError?.message ?? payload.message ?? `Target dashboard failed: ${response.status}`));
+    throw new Error(formatTargetError(payload, `Target dashboard failed: ${response.status}`, response.status));
   }
   return payload.data as LegacyDashboardStats;
 }

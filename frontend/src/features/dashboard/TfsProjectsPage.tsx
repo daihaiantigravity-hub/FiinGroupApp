@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import {
   getTfsIterations,
@@ -22,8 +23,9 @@ import {
 import { canUseProjectManagementCapability } from '../projectManagement/projectManagementPermissions';
 
 type ProjectSheet = 'overview' | 'teams' | 'iterations' | 'work-items' | 'wbs' | 'charter' | 'stakeholder' | 'resource' | 'cost' | 'risk' | 'quality' | 'communication' | 'change_log';
+type ProjectSheetDefinition = { key: ProjectSheet; label: string; available: boolean; reason?: string; delegatesToTarget?: boolean };
 
-const sheets: Array<{ key: ProjectSheet; label: string; available: boolean; reason?: string }> = [
+const sheets: ProjectSheetDefinition[] = [
   { key: 'overview', label: 'Tổng quan', available: true },
   { key: 'teams', label: 'Teams', available: true },
   { key: 'iterations', label: 'Iterations', available: true },
@@ -39,17 +41,17 @@ const sheets: Array<{ key: ProjectSheet; label: string; available: boolean; reas
   { key: 'change_log', label: 'Change Log', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
 ];
 
-const jarvisManagementSheets: Array<{ key: ProjectSheet; label: string; available: boolean; reason?: string }> = [
+const jarvisManagementSheets: ProjectSheetDefinition[] = [
   { key: 'overview', label: 'Tổng quan', available: true },
-  { key: 'charter', label: 'Charter', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
-  { key: 'stakeholder', label: 'Stakeholder', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
+  { key: 'charter', label: 'Charter', available: true, delegatesToTarget: true },
+  { key: 'stakeholder', label: 'Stakeholder', available: true, delegatesToTarget: true },
   { key: 'wbs', label: 'WBS', available: true },
-  { key: 'resource', label: 'Resource & RACI', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
-  { key: 'cost', label: 'Cost & Budget', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
-  { key: 'risk', label: 'Risk', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
-  { key: 'quality', label: 'Quality', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
-  { key: 'communication', label: 'Communication', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
-  { key: 'change_log', label: 'Change Log', available: false, reason: 'Chờ nguồn dữ liệu Jarvis DB.' },
+  { key: 'resource', label: 'Resource & RACI', available: true, delegatesToTarget: true },
+  { key: 'cost', label: 'Cost & Budget', available: true, delegatesToTarget: true },
+  { key: 'risk', label: 'Risk', available: true, delegatesToTarget: true },
+  { key: 'quality', label: 'Quality', available: true, delegatesToTarget: true },
+  { key: 'communication', label: 'Communication', available: true, delegatesToTarget: true },
+  { key: 'change_log', label: 'Change Log', available: true, delegatesToTarget: true },
 ];
 
 function LoadingState({ text }: { text: string }) {
@@ -141,9 +143,22 @@ function TfsTaskCreateModal({ project, workItems, item, onClose, onCreated }: { 
 }
 
 type TfsPageKind = 'browser' | 'management' | 'tasks';
-const projectManagementStorageKey = 'projectmanagement.lastProject';
+const projectManagementStorageKey = 'projectmanagement.tfsProject';
+const legacyProjectManagementStorageKey = 'projectmanagement.lastProject';
+
+function targetProjectManagementPath(project: TfsProject, sheet: ProjectSheet = 'overview') {
+  const params = new URLSearchParams({ sourceProjectId: String(project.id) });
+  if (sheet !== 'overview') params.set('sheet', sheet);
+  return `/projectmanagement-local?${params.toString()}`;
+}
+
+function targetProjectManagementAnalysisPath(project: TfsProject, analysis: 'workload' | 'critical-path' | 'baseline' | 'activity' | 'export') {
+  const params = new URLSearchParams({ sourceProjectId: String(project.id), analysis });
+  return `/projectmanagement-local?${params.toString()}`;
+}
 
 export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 'browser' }: { initialSheet?: ProjectSheet; pageKind?: TfsPageKind }) {
+  const navigate = useNavigate();
   const auth = useAuth();
   const targetMode = (import.meta.env.VITE_AUTH_MODE ?? 'legacy') === 'target-dev';
   const progressMode = pageKind === 'tasks' || initialSheet === 'wbs';
@@ -250,6 +265,19 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
 
   function showBoundaryNotice(title: string, message: string) {
     setToolsOpen(false);
+    if (pageKind === 'tasks' && selected) {
+      const targetAnalysis = ({
+        'Phân bổ nguồn lực': 'workload',
+        'Đường găng': 'critical-path',
+        'Baseline': 'baseline',
+        'Lịch sử': 'activity',
+        'Xuất/Nhập': 'export',
+      } as const)[title];
+      if (targetAnalysis) {
+        navigate(targetProjectManagementAnalysisPath(selected, targetAnalysis));
+        return;
+      }
+    }
     setNotice({ title, message });
   }
 
@@ -258,6 +286,7 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     if (pageKind === 'management') {
       try {
         window.localStorage.removeItem(projectManagementStorageKey);
+        window.localStorage.removeItem(legacyProjectManagementStorageKey);
       } catch {
         // Project selection persistence is optional.
       }
@@ -295,7 +324,8 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
   useEffect(() => {
     if (!targetMode || pageKind !== 'management' || selected || projects.length === 0) return;
     try {
-      const savedProjectKey = window.localStorage.getItem(projectManagementStorageKey);
+      const savedProjectKey = window.localStorage.getItem(projectManagementStorageKey)
+        || window.localStorage.getItem(legacyProjectManagementStorageKey);
       const savedProject = projects.find(project => project.collection + '/' + project.id === savedProjectKey);
       if (savedProject) void selectProject(savedProject);
     } catch {
@@ -497,6 +527,10 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
     }
     const sheetList = pageKind === 'management' ? jarvisManagementSheets : sheets;
     const targetSheet = sheetList.find(item => item.key === sheet);
+    if (pageKind === 'management' && targetSheet?.delegatesToTarget) {
+      navigate(targetProjectManagementPath(selected, sheet));
+      return;
+    }
     if (!targetSheet?.available) {
       showBoundaryNotice(targetSheet?.label ?? 'Sheet chưa khả dụng', targetSheet?.reason ?? 'Nguồn dữ liệu cho sheet này chưa được chuyển đổi.');
       return;
@@ -656,14 +690,14 @@ export default function TfsProjectsPage({ initialSheet = 'overview', pageKind = 
         <div className="projectmanagement-head-left"><h1 className="projectmanagement-h1">Quản lý dự án</h1></div>
         <div className="projectmanagement-proj"><label htmlFor="projectmanagementProject">Dự án</label><select id="projectmanagementProject" className="projectmanagement-select" value={selected ? selected.collection + '/' + selected.id : ''} onChange={event => { const project = projects.find(item => item.collection + '/' + item.id === event.target.value); if (project) void selectProject(project); else clearProjectSelection(); }}><option value="">— Chọn dự án —</option>{projects.map(project => <option key={project.collection + '/' + project.id} value={project.collection + '/' + project.id}>{project.name} ({project.collection})</option>)}</select></div>
       </div>
-      <div className="pm-sheets source-pm-sheets" role="tablist" aria-label="Project management sheets">{jarvisManagementSheets.map(sheet => <button key={sheet.key} type="button" role="tab" aria-selected={activeSheet === sheet.key} aria-disabled={!sheet.available} className={'pm-sheet-tab' + (activeSheet === sheet.key ? ' active' : '') + (!sheet.available ? ' unavailable' : '')} title={sheet.available ? sheet.label : `${sheet.label}: ${sheet.reason}`} onClick={() => changeSheet(sheet.key)}>{sheet.label}{sheet.key !== 'overview' && <span className={'st-dot ' + (sheet.available ? 's-done' : 's-na')} />}</button>)}</div>
+      <div className="pm-sheets source-pm-sheets" role="tablist" aria-label="Project management sheets">{jarvisManagementSheets.map(sheet => <button key={sheet.key} type="button" role="tab" aria-selected={activeSheet === sheet.key} aria-disabled={!sheet.available} className={'pm-sheet-tab' + (activeSheet === sheet.key ? ' active' : '') + (!sheet.available ? ' unavailable' : '')} title={sheet.delegatesToTarget ? `${sheet.label}: mở trên PM đích của project đang chọn` : sheet.available ? sheet.label : `${sheet.label}: ${sheet.reason}`} onClick={() => changeSheet(sheet.key)}>{sheet.label}{sheet.key !== 'overview' && <span className={'st-dot ' + (sheet.delegatesToTarget ? 's-target' : sheet.available ? 's-done' : 's-na')} />}</button>)}</div>
       {error && <p className="error">{error}</p>}
       {loading && <div className="projectmanagement-state">Đang tải danh sách dự án…</div>}
       {!loading && !selected && <div className="projectmanagement-state">Chọn dự án để xem dòng chảy.</div>}
       {!loading && selected && <>
         {activeSheet === 'overview' && <>
           <div className="projectmanagement-summary"><div className="sb-proj"><div className="t" title={selected.name}>{selected.name}</div><div className="m">Collection: {selected.collection} · Trạng thái: {selected.state || '—'}</div></div><div className="sb-kpi"><div className="k">Teams</div><div className="v">{loadedSheets.has('teams') ? teams.length : '—'}</div></div><div className="sb-kpi exec"><div className="k">Work items</div><div className="v">{loadedSheets.has('work-items') ? workItemTotal : '—'}</div></div></div>
-          <div className="projectmanagement-state">Chưa có dữ liệu `pm-flow` từ Jarvis DB trong hệ thống mới. Phần dữ liệu TFS hiện tại chỉ hiển thị theo chế độ đọc. <a href="/projectmanagement-local">Mở PM đích (local)</a> để kiểm tra bảy bảng lõi bằng nguồn target đã cấu hình.</div>
+          <div className="projectmanagement-state">Chưa có dữ liệu `pm-flow` từ Jarvis DB trong hệ thống mới. Phần dữ liệu TFS hiện tại chỉ hiển thị theo chế độ đọc. <a href={targetProjectManagementPath(selected)}>Mở PM đích (local)</a> của project đang chọn để kiểm tra các bảng lõi bằng nguồn target đã cấu hình.</div>
         </>}
         {activeSheet === 'wbs' && <div className="projectmanagement-wbs-host">{renderSheetContent()}</div>}
       </>}

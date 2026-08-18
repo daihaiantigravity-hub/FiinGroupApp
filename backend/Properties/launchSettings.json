@@ -1,3 +1,18 @@
 {
-  "profiles": { "FiinGroupApp.Api": { "commandName": "Project", "dotnetRunMessages": true, "launchBrowser": false, "applicationUrl": "http://localhost:5080", "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" } } }
+  "profiles": {
+    "FiinGroupApp.Api": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Tfs__Enabled": "true",
+        "Tfs__BaseUrl": "http://192.168.1.40:8080/tfs",
+        "Tfs__Collection": "FiinGroup",
+        "Tfs__RequireIdentityMapping": "false",
+        "Tfs__WriteEnabled": "false"
+      }
+    }
+  }
 }

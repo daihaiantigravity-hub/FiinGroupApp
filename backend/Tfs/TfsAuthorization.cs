@@ -8,14 +8,14 @@ public static class TfsAuthorization
         => Results.Json(new
         {
             success = false,
-            error = new { code = "TFS_FORBIDDEN", message = "TFS project permission is required." }
+            error = new { code = "TFS_FORBIDDEN", errorId = Guid.NewGuid().ToString("N"), message = "TFS project permission is required." }
         }, statusCode: StatusCodes.Status403Forbidden);
 
     public static IResult WriteForbidden()
         => Results.Json(new
         {
             success = false,
-            error = new { code = "TFS_WRITE_FORBIDDEN", message = "TFS task write permission is required." }
+            error = new { code = "TFS_WRITE_FORBIDDEN", errorId = Guid.NewGuid().ToString("N"), message = "TFS task write permission is required." }
         }, statusCode: StatusCodes.Status403Forbidden);
 
     public static bool CanRead(AuthenticatedUser authenticatedUser, params string[] formCodes)

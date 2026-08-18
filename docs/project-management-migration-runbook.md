@@ -29,6 +29,16 @@ model:
 
 It does not import Jarvis data and does not create a TFS-to-project mapping.
 
+Migration `005_project_management_baseline_read` adds the source-aligned
+baseline read slice: `pm_task_baseline` and the nullable
+`pm_project.active_baseline` marker. It supports baseline list/comparison
+reads only; baseline create, activate and delete operations are not enabled.
+
+Migration `006_project_management_collaboration_read` adds target read tables
+for comments/replies, attachment metadata and task activity log. It does not
+enable comment/attachment/activity writes, file upload or user-directory
+mapping.
+
 ## Preconditions
 
 1. Use a disposable/local MariaDB database first.
@@ -83,6 +93,29 @@ Then, after migration `004`, apply the optional PMBOK fixture:
 Get-Content "D:\DEV\FiinGroupApp\backend\Database\Fixtures\project-management-pmbok-fixture.sql" |
   mariadb --host 127.0.0.1 --port <target-port> --user <target-user> --password
 ```
+
+After migration `005`, apply the optional baseline fixture:
+
+```powershell
+Get-Content "D:\DEV\FiinGroupApp\backend\Database\Fixtures\project-management-baseline-fixture.sql" |
+  mariadb --host 127.0.0.1 --port <target-port> --user <target-user> --password
+```
+
+It creates only synthetic baseline rows for `FIXTURE-PM-001`, marks the active
+baseline for read display and is safe to repeat on the disposable target
+database. The target UI exposes comparison and variance only; it does not
+write baseline state.
+
+After migration `006`, apply the optional collaboration fixture:
+
+```powershell
+Get-Content "D:\DEV\FiinGroupApp\backend\Database\Fixtures\project-management-collaboration-fixture.sql" |
+  mariadb --host 127.0.0.1 --port <target-port> --user <target-user> --password
+```
+
+It creates synthetic comments, one reply, one attachment metadata row and
+activity entries for `FIXTURE-PM-001`. The target screen displays them as
+read-only task detail/project activity data; no file is uploaded or copied.
 
 ## Enable the target read-only API
 

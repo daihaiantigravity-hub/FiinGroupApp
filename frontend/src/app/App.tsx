@@ -7,6 +7,8 @@ import ProfilePage from '../features/auth/ProfilePage';
 import DashboardPage from '../features/dashboard/DashboardPage';
 import TfsProjectsPage from '../features/dashboard/TfsProjectsPage';
 import LocalProjectManagementPage from '../features/projectManagement/LocalProjectManagementPage';
+import TargetTaskPlanPage from '../features/projectManagement/TargetTaskPlanPage';
+import TargetProjectSummaryPage from '../features/projectManagement/TargetProjectSummaryPage';
 import KnowledgePage from '../features/content/KnowledgePage';
 import DocumentsPage from '../features/content/DocumentsPage';
 
@@ -48,6 +50,9 @@ const tabLabels: Record<string, string> = {
   '/projectmanagement': 'Quản lý dự án',
   '/project-tasks': 'Tiến độ dự án',
   '/projectmanagement-local': 'PM đích (local)',
+  '/task-plan-list-local': 'Danh sách Task Plan (local)',
+  '/task-plan-local': 'Task Plan tuần (local)',
+  '/project-summary-local': 'Tổng hợp dự án (local)',
   '/wiki': 'Wiki nội bộ',
   '/announcements': 'Thông báo & Tài liệu',
   '/documents': 'Tài liệu',
@@ -60,6 +65,9 @@ function TargetPage({ path }: { path: string }) {
     case '/projectmanagement': return <ProtectedRoute><TfsProjectsPage pageKind="management" /></ProtectedRoute>;
     case '/project-tasks': return <ProtectedRoute><TfsProjectsPage initialSheet="wbs" pageKind="tasks" /></ProtectedRoute>;
     case '/projectmanagement-local': return <ProtectedRoute><LocalProjectManagementPage /></ProtectedRoute>;
+    case '/task-plan-list-local': return <ProtectedRoute><TargetTaskPlanPage mode="list" /></ProtectedRoute>;
+    case '/task-plan-local': return <ProtectedRoute><TargetTaskPlanPage mode="week" /></ProtectedRoute>;
+    case '/project-summary-local': return <ProtectedRoute><TargetProjectSummaryPage /></ProtectedRoute>;
     case '/wiki': return <ProtectedRoute><KnowledgePage kind="wiki" /></ProtectedRoute>;
     case '/announcements': return <ProtectedRoute><KnowledgePage kind="announcements" /></ProtectedRoute>;
     case '/documents': return <ProtectedRoute><DocumentsPage /></ProtectedRoute>;
@@ -208,8 +216,8 @@ export default function App() {
 
   const projectEntries: SourceEntry[] = [
     { label: 'Dashboard CEO' }, { label: 'Khách hàng' }, { label: 'Phụ lục/Hợp đồng' }, { label: 'Phân bổ CPBH' },
-    { label: 'Quản lý dự án', to: '/projectmanagement' }, { label: 'Tiến độ dự án', to: '/project-tasks' }, { label: 'PM đích (local)', to: '/projectmanagement-local' }, { label: 'Tổng hợp dự án' },
-    { label: 'PDCA & Đề xuất' }, { label: 'Chi phí dự án' }, { label: 'Danh sách Task Plan' }, { label: 'KPI Doanh thu' },
+    { label: 'Quản lý dự án', to: '/projectmanagement' }, { label: 'Tiến độ dự án', to: '/project-tasks' }, { label: 'PM đích (local)', to: '/projectmanagement-local' }, { label: 'Tổng hợp dự án', to: '/project-summary-local' },
+    { label: 'PDCA & Đề xuất' }, { label: 'Chi phí dự án' }, { label: 'Danh sách Task Plan', to: '/task-plan-list-local' }, { label: 'Task Plan tuần', to: '/task-plan-local' }, { label: 'KPI Doanh thu' },
   ];
 
   return <div className={'app-shell' + (sidebarOpen ? ' sidebar-open' : '') + (sidebarCollapsed ? ' sidebar-collapsed' : '')}>

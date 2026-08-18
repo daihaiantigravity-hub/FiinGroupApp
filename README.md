@@ -66,3 +66,7 @@ delete and PMBOK persistence remain disabled.
 The technical pilot configuration and evidence requirements are documented in `docs/pilot-environment.md`.
 
 TFS domain login setup and troubleshooting are documented in `docs/tfs-login-troubleshooting.md`. The target must be restarted after changing `Tfs__*` environment variables.
+
+For repeatable local startup, use `scripts/start-target-dev.cmd -StartFrontend`
+and follow `docs/local-startup-runbook.md`. It detects an existing backend on
+port 5080 instead of launching a duplicate process.

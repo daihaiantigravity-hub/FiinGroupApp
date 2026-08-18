@@ -1,5 +1,218 @@
 # AI-DLC Audit Log
 
+## 2026-08-18 - Local target-dev proxy recovery
+
+- Diagnosed the reported 502: frontend had no `.env`, so Vite defaulted to
+  legacy mode and proxied `/api` to unavailable `localhost:3000`.
+- Added local-only `frontend/.env` with `VITE_AUTH_MODE=target-dev` and target
+  proxy `localhost:5080`; restarted only the Vite process.
+- Verified `/api/v2/auth/session` reaches Kestrel and returns expected 401
+  without a session. No Jarvis file was modified.
+
+## 2026-08-18 - Sidebar scrollbar detail
+
+- Adjusted only the existing sidebar scroll presentation: removed reserved
+  gutter, narrowed the thumb, made the track transparent and removed the corner
+  rail/arrows. Navigation structure and project behavior are unchanged.
+- Frontend 27/27 tests passed; Vite build passed.
+
+## 2026-08-18 - Contract-field fixture coverage
+
+- Extended only `project-management-target-fixture.sql` with synthetic contract,
+  acceptance, warranty, maintenance, next-action and commission values.
+- No Jarvis file or production/business data was modified.
+
+## 2026-08-18 - Target project-list filter parity
+
+- Re-read Jarvis project-list filter parameters and kept the target operation
+  client-side over the existing authenticated project projection.
+- Added project search, PM and status filters to the local workspace without
+  creating API mutations or source-only joins.
+- Frontend 27/27 tests passed; Vite build passed. Jarvis tracked diff remains
+  clean.
+
+## 2026-08-18 - Target project contract-field parity
+
+- Re-read Jarvis `pm_project` definition and compared fields consumed by the
+  target project/workspace reader.
+- Added source-defined contract, warranty, maintenance, next-action, budget
+  percentage, remarks and commission fields to the target DTO and UI.
+- Backend 37/37 tests passed; frontend 27/27 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target payment document metadata parity
+
+- Re-read Jarvis payment-document GET route and the target projection created
+  for migration 007.
+- Added authenticated read-only document metadata API and expandable payment
+  document panel. No attachment serving, upload or document mutation was
+  enabled.
+- Backend 37/37 tests passed; frontend 27/27 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target commission read parity
+
+- Re-read Jarvis `server/routes/pm-project-commissions.js` and the commission
+  migration, including payment linkage and visible status fields.
+- Added target migration 011, synthetic commission rows, authenticated
+  read-only API and project workspace commission table. No commission
+  calculation, payment or mutation was enabled.
+- Backend 37/37 tests passed; frontend 26/26 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target project requests read parity
+
+- Re-read Jarvis `server/routes/pm-project-requests.js` and the
+  `pm_project_requests` definition in `004_pm_project.sql`.
+- Added target migration 010, synthetic request rows, authenticated read-only
+  API and project workspace request table. Approval and all request mutations
+  remain gated.
+- Backend 37/37 tests passed; frontend 25/25 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target PDCA read parity
+
+- Re-read Jarvis `server/routes/pdca.js` and the `pm_project_pdca` definition
+  in `004_pm_project.sql`.
+- Added target migration 009, synthetic PDCA rows, authenticated read-only API
+  and project workspace PDCA cards. No create/update/delete or HR user join was
+  enabled.
+- Backend 37/37 tests passed; frontend 24/24 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target other project cost read parity
+
+- Re-read Jarvis `server/routes/cost-other.js` and the
+  `pm_project_cost_other` definition in `004_pm_project.sql`.
+- Added target migration 008, synthetic cost rows, authenticated read-only API
+  and a separate project workspace cost table. Encrypted member-cost, finance
+  aggregation and all cost mutations remain outside the target slice.
+- Backend 37/37 tests passed; frontend 23/23 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target project payments read parity
+
+- Re-read Jarvis `pm-projects/:projectId/payments` and the `004_pm_project.sql`
+  payment/document definitions.
+- Added target migration 007, synthetic fixture rows, authenticated read-only
+  API and project workspace payment table. No payment/document mutation was
+  enabled.
+- Backend 37/37 tests passed; frontend 22/22 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 - Target resource workload read parity
+
+- Re-read Jarvis `server/routes/project-tasks.js` workload route and preserved
+  period filtering, overlapping task selection, assignee grouping and source
+  counters in the target PM reader/API/UI.
+- Added the authenticated read-only endpoint
+  `/api/v2/project-management/workload` and resource allocation table with
+  task drill-down. No assignment, task or Jarvis mutation was added.
+- Backend 37/37 tests passed; frontend 21/21 tests passed; Vite build passed.
+- No tracked source file under `FiinGroup.Jarvis` was modified.
+
+## 2026-08-18 — Target weekly Summary read parity
+
+- Re-read the trusted Jarvis `GET /summaries`, `/summary/:id`,
+  `/summary-customers` and `/summary-projects` routes and the source Summary
+  table/filter rendering.
+- Added paged target read APIs for stored `pm_project_summary` rows, detail,
+  customer options and project options, joined only to target `pm_project`
+  metadata. No Jarvis/TFS mapping or Summary write route was added.
+- Added the weekly Summary history table, source-aligned filters, pagination
+  and project navigation to `/project-summary-local`.
+- Backend isolated tests passed 37/37; frontend tests passed 19/19 and the
+  production build succeeded. No files in `FiinGroup.Jarvis` were changed.
+- Completed the existing detail contract in the UI: double-clicking a weekly
+  Summary row loads `/summaries/{summaryId}` and shows Plan/Actual, dates,
+  section, status, notes, resources and target project metadata read-only.
+- Added the source-aligned same-week `section_type=2` to progress preview for
+  unmaterialized projects. The synthetic fixture row 69904 validates this
+  branch; no summary row is created by the UI.
+
+## 2026-08-18 — Target task export read parity
+
+- Re-read Jarvis `GET /api/project-tasks/export/:projectId` and its CSV/JSON
+  field mapping.
+- Added target CSV/JSON export over the existing target workspace projection
+  and added read-only export buttons to the PM workspace. Import/template and
+  all task mutations remain gated.
+- Backend isolated tests passed 37/37; frontend tests passed 20/20 and the
+  production build succeeded. No files in `FiinGroup.Jarvis` were changed.
+
+## 2026-08-18 — Target Gantt read parity
+
+- Re-read the source `GET /api/project-tasks/gantt/:id_project` query and
+  Gantt rendering in `pages/projects/project-tasks.js`/`.html`.
+- Added `GET /api/v2/project-management/projects/{projectId}/gantt` over the
+  existing target project/task/assignee/dependency read model.
+- Added the target Gantt view with hierarchy, padded date timeline, progress
+  fill, status/overdue colors, milestone bars and dependency listing. Selecting
+  a task opens the existing read-only detail; no task mutation was added.
+- Resource Workload remains gated because source `users` and `hr_holiday`
+  tables have no approved target mapping. Backend isolated tests passed
+  35/35; frontend tests passed 18/18 and the production build succeeded.
+  No files in `FiinGroup.Jarvis` were changed.
+
+## 2026-08-17 — Target collaboration read parity
+
+- Re-read the trusted Jarvis collaboration migrations `013_task_comments_attachments.sql`
+  and `015_task_activity_log.sql`, plus the corresponding GET routes in
+  `server/routes/project-tasks.js` and task-detail rendering in
+  `pages/projects/project-tasks.js`.
+- Added target migration `006_project_management_collaboration_read` and a
+  repeatable synthetic fixture with comments, a reply, attachment metadata and
+  activity entries for `FIXTURE-PM-001`.
+- Added read-only target APIs and UI panels for task comments/replies,
+  attachments, task activity and paged project activity. No POST/PUT/DELETE,
+  upload, user-directory join or Jarvis/TFS mutation was added.
+- Backend isolated tests passed 34/34; frontend tests passed 17/17 and the
+  production build succeeded. Migration 006 and the fixture were applied to
+  the local target database; no files in `FiinGroup.Jarvis` were changed.
+
+## 2026-08-17 — Target Baseline read parity
+
+- Re-read the source baseline schema and list/compare queries in
+  `FiinGroup.Jarvis/server/migrations/014_task_baseline.sql` and
+  `server/routes/project-tasks.js`.
+- Added target migration `005_project_management_baseline_read`, manifest
+  checksum and a repeatable synthetic baseline fixture for `FIXTURE-PM-001`.
+- Added read-only target list/compare endpoints, including source-compatible
+  `DATEDIFF` variances and the five summary metrics; no baseline mutation or
+  Jarvis/TFS mapping was added.
+- Added the baseline selector/comparison panel to `/projectmanagement-local`.
+  Backend isolated tests passed 32/32; frontend tests passed 16/16 and the
+  production build succeeded. The target local database applied migration 005
+  and contains three synthetic baseline rows; no files in `FiinGroup.Jarvis`
+  were changed.
+
+## 2026-08-17 — Target WBS Critical Path read parity
+
+- Re-read the source Critical Path route and its UI summary in
+  `FiinGroup.Jarvis/server/routes/project-tasks.js` and
+  `pages/projects/project-tasks.js`.
+- Added the target read-only Critical Path endpoint and ported the source
+  forward/backward pass over target tasks and dependencies.
+- Added the source-style project-duration/path summary to the target PM
+  screen; no `is_critical` persistence, TFS write or Jarvis mutation was added.
+- Added calculator coverage for chained dependencies and the zero-duration
+  fallback. Backend tests passed 30/30; frontend tests passed 15/15 and the
+  production build succeeded.
+
+## 2026-08-17 — PMBOK sheet navigation parity
+
+- Re-read the source `PM_SHEETS`, `renderSheetBar`, `updateSheetDots` and
+  `activateSheet` behavior in `pages/projects/projectmanagement.js`, plus the
+  matching source tab CSS.
+- Added the source-aligned eight-sheet PMBOK read-only tab bar to
+  `LocalProjectManagementPmbok`; the existing target PM Flow and WBS sections
+  represent source `Tổng quan` and `WBS` respectively.
+- Reused target `buildFlow` statuses for the tab dots and kept all existing
+  target DTO fields/panels; no source editor or mutation was added.
+- Frontend tests passed 15/15 and the production build succeeded; no files in
+  `FiinGroup.Jarvis` were changed. The current backend test project also passed
+  28/28.
+
 ## 2026-08-17 — Target PMBOK read slice
 
 - Re-read the trusted source migrations `090`–`094` and the PMBOK route
@@ -657,3 +870,245 @@
 - Thêm health check `project-management-store` cho database PM riêng.
 - Khi tắt, health check không mở database; khi bật, kiểm tra connection bằng
   query an toàn `SELECT 1` và không ghi log connection string.
+
+## 2026-08-17 — Target Task Plan read slice
+
+- Đối chiếu `pages/projects/task-plan-list.html`, `task-plan-list.js`,
+  `task-plan.html`, `task-plan.js` và route `server/routes/task-plans.js` của
+  Jarvis để giữ đúng các trường tuần, project, nội dung, Plan/Actual, kết quả,
+  nguồn lực và trạng thái.
+- Thêm API target read-only có phân trang/bộ lọc cho `pm_task_plan`, cùng hai
+  màn `/task-plan-list-local` và `/task-plan-local`; các màn này dùng rõ nhãn
+  target/synthetic và liên kết về workspace project đích.
+- Không bật save-batch, delete, inherited-plan, approval, TFS sync hoặc gọi
+  API Jarvis; không coi `pm_task_plan.id_project` là TFS GUID.
+- Bổ sung test client, test reader khi store bị tắt; frontend 14/14, backend
+  test build/run 27/27, backend build 0 warning/0 error.
+- Không có file nào trong `FiinGroup.Jarvis` bị sửa.
+
+## 2026-08-17 — Target PM database bootstrap checkpoint
+
+- Tạo database local `FiinGroupApp.ProjectManagement`, áp dụng migration `003`
+  và optional migration `004` bằng `backend.DatabaseMigrator` với database
+  confirmation bắt buộc.
+- Nạp thành công core fixture và PMBOK fixture target-only. Kiểm tra hiện tại:
+  2 project, 4 task, 3 Task Plan, 3 summary, 1 charter, 2 risk và 2 quality plan.
+- Sửa fixture core: bổ sung `source_url` và căn lại thứ tự source fields để
+  không vi phạm unique key `uk_task_external_source`.
+- Không đọc/ghi database nghiệp vụ Jarvis và không thay đổi credential trong
+  repository.
+
+## 2026-08-17 — Target Task Plan detail checkpoint
+
+- Bổ sung `source_plan_id` và `created_at` vào target Task Plan DTO/query để
+  giữ lineage và metadata có sẵn trong schema.
+- Bổ sung chọn dòng bằng chuột/bàn phím và panel detail trong cả danh sách và
+  màn tuần; vẫn giữ liên kết về workspace project và boundary read-only.
+- Không tái tạo previous-week inheritance, save, delete, approval hoặc các
+  mutation của `server/routes/task-plans.js` vì target chưa mở unit dữ liệu ghi.
+- Frontend 15/15 test, frontend build thành công; backend 28/28 test, build
+  0 warning/0 error.
+- Không có file nào trong `FiinGroup.Jarvis` bị sửa.
+## 2026-08-17 — Target project summary read slice
+
+- Đối chiếu `server/routes/pm-flow.js` và `server/routes/project-tasks.js`
+  (`/summaries`) của Jarvis để giữ các chỉ số project/WBS, quá hạn,
+  dependency, Plan/Actual tuần và budget ở mức target có dữ liệu.
+- Thêm `GET /api/v2/project-management/summary` và màn
+  `/project-summary-local` với bộ lọc khách hàng/PM/tình trạng, sắp xếp và link
+  sang workspace hoặc Task Plan.
+- Không suy diễn earned value Redmine, cost cache, HR/finance, PMBOK chưa có
+  dữ liệu; không gọi API Jarvis và không thêm mutation.
+- Bổ sung test reader khi store bị tắt; frontend 15/15, backend test build/run
+  28/28, backend build 0 warning/0 error.
+- Không có file nào trong `FiinGroup.Jarvis` bị sửa.
+
+## 2026-08-17 — Target Task Plan inheritance preview
+
+- Đối chiếu logic source `server/routes/task-plans.js` và `pages/projects/task-plan.js`:
+  tuần hiện tại có thể hiển thị Next Plan tuần trước như Weekly progress nếu
+  chưa có dòng materialized tương ứng.
+- Bổ sung target read-only preview bằng hai truy vấn target; dùng
+  `source_plan_id` để loại trùng và gắn nhãn `Kế thừa`. Không tạo bản ghi, không
+  bật save-batch, delete, approval hoặc mutation.
+- Frontend 15/15 test và build thành công; không có file nào trong
+  `FiinGroup.Jarvis` bị sửa.
+
+## 2026-08-17 — Target Task Plan week navigation checkpoint
+
+- Bổ sung điều hướng tuần trước/tuần sau, nút về tuần hiện tại và khoảng ngày
+  ISO Monday–Sunday trên `/task-plan-local`.
+- Tách rõ `Weekly progress` và `Next plan` theo từng project, giữ badge dòng
+  `Kế thừa` và panel detail hiện có.
+- Các control chỉ thay đổi query read-only; không bật save, delete hoặc mutation.
+- Frontend 15/15 test và build thành công; không có file nào trong
+  `FiinGroup.Jarvis` bị sửa.
+
+## 2026-08-17 — Target PM Flow read slice
+
+- Đối chiếu source `server/routes/pm-flow.js` để giữ đủ 11 bước: Charter,
+  Stakeholder, WBS, Schedule, Resource/RACI, Cost, Risk, Quality,
+  Communication, Change Log và Dashboard.
+- Thêm flow read-only vào `/projectmanagement-local`; WBS/schedule/dashboard
+  dùng workspace target, các bước PMBOK dùng endpoint PMBOK target khi người dùng
+  chọn mở. Trạng thái chưa tải không bị suy diễn thành đã thiết lập.
+- Không tự tạo earned-value Redmine, cost cache, HR/finance, meeting hoặc
+  mapping TFS; PM Flow vẫn read-only và không có mutation.
+- Sửa truy vấn summary target để dependency không nhân đôi task count,
+  completed/active/overdue count hoặc average progress.
+- Frontend build thành công sau batch; test/build đầy đủ được chạy lại ở
+  checkpoint bàn giao.
+- Không có file nào trong `FiinGroup.Jarvis` bị sửa.
+
+## 2026-08-18 — PM local UI and logic parity correction
+
+- Rà soát lại `projectmanagement.html`, `projectmanagement.js` và
+  `server/routes/pm-flow.js` của Jarvis làm nguồn hành vi; giữ shell đích
+  read-only và không sửa file trong `FiinGroup.Jarvis`.
+- Sửa màn `/projectmanagement-local` về cấu trúc source: một project selector,
+  sheet tabs, dot trạng thái theo flow, summary KPI và flow dọc; loại bỏ toolbar
+  lọc/banner/selector ẩn làm lệch UI và điều hướng sheet khi chọn bước.
+- Căn lại logic Charter proxy, Stakeholder completeness, tiến độ Schedule và
+  Cost theo contingency/budget; khôi phục nhãn tiếng Việt bị lỗi mã hóa ở flow,
+  PMBOK, project summary và Task Plan.
+- Không thêm mutation, TFS/Jarvis mapping hoặc suy diễn dữ liệu PMBOK chưa tải.
+- Frontend test 32/32 và production build thành công; kiểm tra trình duyệt local
+  không thực hiện được do browser runtime bị chặn dependency nội bộ `spawn EPERM`.
+
+## 2026-08-18 — PM source parity follow-up
+
+- Căn lại `setup_percent` theo đúng mẫu số của source: toàn bộ setup section
+  được tính, section chưa có dữ liệu đóng góp 0 thay vì bị loại khỏi mẫu số.
+- Ẩn progress bar ở section `na`, bỏ PMBOK tab lồng không có trong UI source,
+  và giữ sheet bar trên cùng làm điểm điều hướng duy nhất; rail, chip MVP và
+  vị trí nút `Mở →` cũng được đưa về cùng bố cục flow source.
+- Bổ sung tổng mandays kế hoạch vào Resource/RACI flow và đưa scroll khi đổi
+  sheet về root PM như hành vi `activateSheet` của Jarvis.
+
+## 2026-08-18 — WBS/Gantt and summary interaction parity
+
+- Căn lại Gantt target với project-tasks source: đồng bộ cuộn header/thân,
+  hiển thị đường ngày hiện tại, dependency connectors và task summary/milestone.
+- Thay listener DOM thủ công ở lịch sử Project Summary bằng event React có
+  hỗ trợ Enter/Space để mở detail read-only ổn định sau lọc và phân trang.
+- Giữ nguyên ranh giới target read-only; không bổ sung thao tác save/delete/sync.
+
+## 2026-08-18 — PM sheet navigation follow-up
+
+- Căn `Schedule & Gantt` flow action về sheet WBS giống source `edit: 'wbs'`;
+  không mở nhầm PMBOK khi người dùng bấm `Mở →`.
+- Loại toolbar PMBOK phụ khỏi sheet view; trạng thái loading/error được hiển
+  thị inline để sheet bar chính là điểm điều hướng duy nhất.
+
+## 2026-08-18 — PM Flow legend parity
+
+- Bổ sung legend trạng thái ở cuối Overview, gồm Done/Đang làm/Chưa bắt đầu/
+  Tự động/Chưa tải PMBOK và giải thích màu rail setup/auto/MVP như source.
+
+## 2026-08-18 — PM project selection persistence
+
+- Đồng bộ hành vi selector với `projectmanagement.js`: ưu tiên `projectId` trên
+  URL, sau đó khôi phục project cuối từ `localStorage`, rồi mới fallback về
+  project hiện tại hoặc project đầu tiên; lựa chọn mới cũng được lưu lại.
+
+## 2026-08-18 — Task Plan list parity
+
+- Căn mặc định Task Plan về Weekly Progress, tuần hiện tại và trạng thái hiệu
+  lực như source; vẫn cho phép người dùng đổi bộ lọc sang các loại khác.
+- Bổ sung sort theo cột ở target list và truyền sort/order xuống API với whitelist
+  SQL, giữ đúng thứ tự khi phân trang thay vì chỉ sort phần dữ liệu đang tải.
+
+## 2026-08-18 — Gantt interaction parity
+
+- Đồng bộ cuộn hai chiều giữa header và thân Gantt để kéo timeline ở khu vực
+  nào cũng giữ đúng cột ngày.
+- Không tô progress fill hoặc label tên lên summary/milestone, khớp cách source
+  hiển thị hai loại task đặc biệt.
+
+## 2026-08-18 — Project selector initial state parity
+
+- Khi không có `projectId` trên URL hoặc project đã lưu, selector giữ trạng thái
+  “Chọn dự án” như Jarvis thay vì tự mở project đầu tiên và tải nhầm workspace.
+- Bổ sung empty state tương ứng để vùng nội dung không bị trống sau khi bỏ
+  auto-select.
+
+## 2026-08-18 — PMBOK loading deduplication
+
+- Loại bỏ lời gọi `loadPmbok` trùng từ Flow action; điều hướng sheet của parent
+  là nơi duy nhất tải PMBOK khi người dùng mở một bước chưa có dữ liệu.
+
+## 2026-08-18 — Project loader race protection
+
+- Các loader PMBOK, WBS analysis, Gantt, baseline, activity, workload, payment,
+  cost, PDCA, request, commission, document và export chỉ commit response nếu
+  project trả về vẫn là project đang chọn, tránh stale response ghi đè workspace.
+
+## 2026-08-18 — Jarvis visual token parity
+
+- Gắn visual contract và token `--q-*` của source cho `.local-pm-page`, đồng thời
+  dùng class `projectmanagement` trên PM workspace React; các border, màu chữ,
+  nền và kích thước sheet/flow nay dùng cùng nền tảng CSS với Jarvis.
+
+## 2026-08-18 — PMBOK nested tab parity
+
+- Khôi phục các tab con Resource/RACI, Quality/Definition of Done và Change
+  requests/nguồn tự động theo markup source; panel chỉ hiển thị pane đang chọn,
+  không còn dồn hai nội dung cạnh nhau như bản target cũ.
+
+## 2026-08-18 — PM Flow action parity
+
+- Hiển thị trạng thái `Sắp có` cho bước chưa có điều hướng, thay vì bỏ trống
+  vùng action như bản React trước đó.
+
+## 2026-08-18 — WBS task grid and sheet view parity
+
+- Đưa WBS về cấu trúc task grid của `project-tasks`: 13 cột, sticky STT/thao
+  tác, priority dot/badge, avatar assignee và progress Actual/Plan riêng.
+- Bổ sung chuyển chế độ `Danh sách`/`Gantt` ngay trong sheet WBS; nút Gantt
+  không còn bị ẩn cùng nhóm analysis toolbar.
+- Gantt có header hai tầng tháng/ngày, đồng bộ cuộn hai chiều và ẩn summary
+  KPI khi rời sheet Tổng quan như controller `activateSheet` của Jarvis.
+- WBS được hiển thị full-width giống task grid source; detail read-only chỉ
+  nằm bên dưới khi người dùng chọn task, còn nhóm task có nút thu gọn/mở rộng
+  theo quan hệ parent-child của WBS.
+
+## 2026-08-18 — PMBOK/status parity follow-up
+
+- Overview tự tải PMBOK workspace cùng lúc với workspace project để PM Flow có
+  thể tính trạng thái đầy đủ như `pm-flow` của Jarvis; khi PMBOK chưa bật vẫn
+  giữ proxy/`Chưa thiết lập`, không suy diễn dữ liệu nguồn.
+- Charter map riêng `approval_status` (`2 = Đã duyệt`) thay vì dùng chung map
+  decision của Change Log; khôi phục trường High risks và các cột Power/
+  Interest/Owner của Stakeholder Register.
+- WBS và Schedule chuyển sang `Chưa thiết lập` khi project không có
+  `sourceProjectId`, tránh hiển thị tiến độ/Gantt giả cho project target-only.
+
+## 2026-08-18 — Task Plan and project selector parity follow-up
+
+- Weekly Task Plan chỉ kế thừa Next Plan của tuần trước khi tuần đang xem
+  hoàn toàn không có dòng, đúng fallback của `task-plan.js`; không trộn dòng
+  kế thừa vào tuần đã có Progress hoặc Next Plan.
+- Project selector dùng cùng quy tắc label/sort của Jarvis: khách hàng →
+  annex/project code → id, đồng bộ ở workspace PM, Task Plan và Summary.
+- Bộ lọc PM của Task Plan target khớp cả `pm_project.pm` và `pm_task_plan.created_by`;
+  trước đó các dòng do PM tạo cho project của PM khác bị bỏ sót.
+- Summary map trạng thái theo `pm_project` của Jarvis (`-1/0/1/2/5/6`) và
+  map riêng trạng thái bản ghi summary, không dùng nhầm status của task.
+- Đồng bộ `projectId` trên URL khi route hiện tại đã mount, để mở project từ
+  Summary/Task Plan không giữ lại workspace của project trước đó.
+
+## 2026-08-18 — TFS project context và PM target navigation
+
+- Nút `Mở PM đích` của trang `/projectmanagement` truyền `sourceProjectId` của
+  TFS project đang chọn; các tab PMBOK trước đây bị khóa nay mở đúng sheet
+  tương ứng trên target workspace.
+- PM target ưu tiên mapping `sourceProjectId` sau `projectId` và không còn
+  fallback sang project lưu gần nhất khi URL đã chỉ rõ context. Nếu chưa có
+  mapping, hiển thị thông báo rõ ràng thay vì mở nhầm project.
+- Tách localStorage của TFS project (`projectmanagement.tfsProject`) và target
+  project (`projectmanagement.targetProject`), tránh hai màn hình ghi đè lên
+  nhau bằng hai định dạng ID khác nhau; vẫn đọc giá trị legacy hợp lệ.
+- Các công cụ đã có read API target (workload, critical path, baseline,
+  activity log và export) từ `/project-tasks` chuyển thẳng sang PM target với
+  đúng `sourceProjectId` và tự mở panel tương ứng; thao tác đồng bộ/ghi TFS
+  vẫn giữ boundary notice vì chưa có contract ghi an toàn.

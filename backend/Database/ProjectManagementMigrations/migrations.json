@@ -15,6 +15,55 @@
       "sha256": "2B33148E642A986059B1E46D04B6ADF6F80BBFA8B8069C78EAF58A01F51F911C",
       "destructive": false,
       "requiresApproval": true
+    },
+    {
+      "id": "005_project_management_baseline_read",
+      "file": "../Migrations/005_project_management_baseline_read.sql",
+      "sha256": "952A8F02901A47AA67CC73F2AED3F55D85FBB3AAE34C8238E2B7EA6D20A0F61B",
+      "destructive": false,
+      "requiresApproval": true
+    },
+    {
+      "id": "006_project_management_collaboration_read",
+      "file": "../Migrations/006_project_management_collaboration_read.sql",
+      "sha256": "50676387A5C275455A9CC2AA6560C2E379DDEC0BEBF9F07CAD1D01C84456520F",
+      "destructive": false,
+      "requiresApproval": true
+    },
+    {
+      "id": "007_project_management_payments_read",
+      "file": "../Migrations/007_project_management_payments_read.sql",
+      "sha256": "A7CF7634F05985ADF6EF49E7EF7AAA74FD543A57D432B4CD5A9AB6C3025183D6",
+      "destructive": false,
+      "requiresApproval": true
+    },
+    {
+      "id": "008_project_management_cost_other_read",
+      "file": "../Migrations/008_project_management_cost_other_read.sql",
+      "sha256": "C771B40D3CCD8E59839A832C34937F663C869818F76F8C82CF6175AE60C64728",
+      "destructive": false,
+      "requiresApproval": true
+    },
+    {
+      "id": "009_project_management_pdca_read",
+      "file": "../Migrations/009_project_management_pdca_read.sql",
+      "sha256": "89C2A746E19ED8F23492E009B429EE7297CB9AAEC7A489249000C594CBBA649E",
+      "destructive": false,
+      "requiresApproval": true
+    },
+    {
+      "id": "010_project_management_requests_read",
+      "file": "../Migrations/010_project_management_requests_read.sql",
+      "sha256": "436ECEB7E4C51AF4AFBAA2236CF7CF318942A97957CC791CFF12FECD2B1A0471",
+      "destructive": false,
+      "requiresApproval": true
+    },
+    {
+      "id": "011_project_management_commission_read",
+      "file": "../Migrations/011_project_management_commission_read.sql",
+      "sha256": "AEF3F342EEDC06285D8B480A847075A58271E0449D8A687713BE56FAF448D3CD",
+      "destructive": false,
+      "requiresApproval": true
     }
   ]
 }
